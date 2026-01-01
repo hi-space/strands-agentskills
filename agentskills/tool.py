@@ -91,10 +91,21 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
                     f"**IMPORTANT:** Only use these tools: `{skill_props.allowed_tools}`\n\n"
                 )
 
-            # Add resource access hint
-            header += (
-                f"**Resources:** Use file_read to access scripts and references in `{skill_props.skill_dir}/`\n\n"
-            )
+            # Scan and list available resources
+            skill_dir = Path(skill_props.skill_dir)
+            resources = []
+            for subdir in ["scripts", "references", "assets"]:
+                resource_dir = skill_dir / subdir
+                if resource_dir.exists() and resource_dir.is_dir():
+                    for file_path in sorted(resource_dir.rglob("*")):
+                        if file_path.is_file():
+                            resources.append(str(file_path.absolute()))
+
+            if resources:
+                header += "**Available Resources:**\n"
+                for resource in resources:
+                    header += f"- `{resource}`\n"
+                header += "\n"
 
             header += "---\n\n"
             header += "# Instructions\n\n"

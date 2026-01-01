@@ -42,6 +42,8 @@ def generate_skills_prompt(skills: List[SkillProperties]) -> str:
     skills_list_lines = []
     for skill in sorted(skills, key=lambda s: s.name):
         skills_list_lines.append(f"- **{skill.name}**: {skill.description}")
+        skills_list_lines.append(f"  Path: `{skill.path}`")
+        skills_list_lines.append(f"  Directory: `{skill.skill_dir}/`")
 
         if skill.allowed_tools:
             skills_list_lines.append(f"  Allowed Tools: {skill.allowed_tools}")
