@@ -1,7 +1,7 @@
-"""Skill activation tool for Strands Agents
+"""Skill tools for Strands Agents
 
-This module creates a simple Strands tool for activating skills following
-the progressive disclosure pattern.
+This module creates Strands tools for progressive disclosure of skills.
+Supports both filesystem-based (recommended) and tool-based approaches.
 """
 
 import logging
@@ -50,31 +50,34 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
     @tool
     def skill(
         skill_name: str,
-        action: str = "activate",
+        action: str = "instructions",
     ) -> str:
-        """Activate and use specialized agent skills
+        """Access specialized agent skills with progressive disclosure
 
         Skills are specialized instruction sets that provide domain expertise
-        and structured workflows. Use this tool to activate a skill when the
-        user's task matches the skill's description.
+        and structured workflows. Use this tool to load skill content progressively.
 
         Args:
-            skill_name: The name of the skill to activate (from available_skills list)
-            action: Action to perform:
-                   - "activate" (default): Activate skill and load full instructions
+            skill_name: The name of the skill (from available_skills list)
+            action: What to load:
+                   - "info": Show metadata only (name, description, paths)
+                   - "instructions" (default): Load skill instructions
                    - "list": Show all available skills
-                   - "info": Show detailed skill metadata
 
         Returns:
-            For 'activate': Full skill instructions from SKILL.md
+            For 'info': Metadata including skill directory path
+            For 'instructions': Full skill instructions from SKILL.md
             For 'list': Formatted list of all available skills
-            For 'info': Detailed metadata about the requested skill
+
+        Progressive Disclosure Pattern:
+            Phase 1: Metadata already in system prompt
+            Phase 2: skill(skill_name="web-research", action="instructions")
+            Phase 3: Use file_read to access resources in skill directory
 
         Example:
-            To use the web-research skill:
-            1. skill(skill_name="web-research", action="activate")
+            1. skill(skill_name="web-research", action="instructions")
             2. Follow the instructions provided
-            3. Use only the tools specified in allowed-tools (if any)
+            3. Read resources: file_read(path="/path/to/skill/scripts/helper.py")
         """
         # Handle list action
         if action == "list":
@@ -114,7 +117,7 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
 
             return "\n".join(info_lines)
 
-        # Handle activate action (default) - Phase 2: Load instructions
+        # Handle instructions action (default) - Phase 2: Load instructions
         if skill_name not in skill_map:
             available = ", ".join(skill_map.keys())
             raise SkillNotFoundError(
@@ -125,11 +128,11 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
         skill_props = skill_map[skill_name]
 
         try:
-            # Phase 2: Load instructions only (not full SKILL.md)
+            # Phase 2: Load instructions only (not frontmatter)
             from .parser import read_instructions
 
             instructions = read_instructions(skill_props.path)
-            logger.info(f"Activating skill: {skill_name}")
+            logger.info(f"Loading instructions for skill: {skill_name}")
 
             # Build response with header and instructions
             header = (
@@ -144,15 +147,20 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
                     f"**IMPORTANT:** Only use these tools: `{skill_props.allowed_tools}`\n\n"
                 )
 
+            # Add resource access hint
+            header += (
+                f"**Resources:** Use file_read to access scripts and references in `{skill_props.skill_dir}/`\n\n"
+            )
+
             header += "---\n\n"
             header += "# Instructions\n\n"
 
             return header + instructions
 
         except Exception as e:
-            logger.error(f"Error activating skill {skill_name}: {e}", exc_info=True)
+            logger.error(f"Error loading skill instructions {skill_name}: {e}", exc_info=True)
             raise SkillActivationError(
-                f"Failed to activate skill '{skill_name}': {e}"
+                f"Failed to load skill '{skill_name}': {e}"
             ) from e
 
     return skill

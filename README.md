@@ -1,351 +1,485 @@
-# Agent Skills for Strands Agents SDK
+# Strands Agent Skills
 
-**Strands Agents SDK를 활용한 Agent Skills 기본 아키텍처**
+**Strands Agents SDK를 위한 Agent Skills 시스템**
 
-Progressive Disclosure 원칙을 기반으로 설계된, 재사용 가능하고 확장 가능한 Agent Skills 시스템입니다.
+Claude Code의 [Skills 패턴](https://www.claude.com/blog/skills-explained)을 Strands SDK에 구현한 두 가지 방식을 제공합니다.
 
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## 🎯 프로젝트 소개
+---
+
+## 📖 개요
 
 ### Agent Skills란?
 
-Agent Skills는 AI Agent에게 전문화된 능력을 부여하는 모듈형 캐피빌리티입니다. 각 Skill은 특정 도메인(웹 리서치, 파일 처리 등)에 대한 전문 지식, 작업 흐름, 모범 사례를 패키징하여 일반 목적의 Agent를 도메인 전문가로 변모시킵니다.
+Agent Skills는 AI Agent에게 도메인별 전문 지식과 작업 흐름을 제공하는 모듈형 시스템입니다:
 
-### 왜 필요한가?
+- **전문 지식**: 특정 도메인(웹 리서치, 코드 리뷰 등)에 대한 상세한 가이드
+- **구조화된 워크플로우**: 검증된 단계별 프로세스
+- **모범 사례**: 도메인 전문가의 노하우를 캡슐화
+- **재사용 가능**: 여러 프로젝트에서 공유 가능
 
-전통적인 Tool 기반 접근법의 한계:
-- **토큰 비효율**: 모든 도구의 사양을 항상 컨텍스트에 로드
-- **복잡도 증가**: 도구가 많아질수록 Agent의 의사결정 복잡도 급증
-- **재사용성 부족**: 전문 지식을 다른 프로젝트에 재사용하기 어려움
+### Skills 작동 방식
 
-Agent Skills의 해결책:
-- **Progressive Disclosure**: 필요한 정보만 필요한 시점에 로드
-- **모듈화**: 독립적인 Skills로 관리하여 재사용성 향상
-- **전문화**: 복잡한 다단계 작업을 하나의 Skill로 캡슐화
-- **격리**: Sub-agent 패턴으로 context 독립성 보장
+Claude Code와 동일하게, Skills는 3단계로 작동합니다:
+
+#### 1️⃣ Discovery (시작 시)
+
+Agent 시작 시 각 Skill의 **이름과 설명만** 로드합니다. 빠른 시작을 유지하면서 Agent가 각 Skill이 언제 관련될지 알 수 있습니다.
+
+```
+skills/web-research/
+  name: "web-research"
+  description: "Structured approach to conducting web research"
+```
+
+#### 2️⃣ Activation (요청 매칭 시)
+
+사용자 요청이 Skill의 설명과 매칭되면, Agent는 **전체 SKILL.md를 context에 로드**합니다. Claude는 semantic similarity로 요청과 설명을 매칭합니다.
+
+```
+User: "Research quantum computing"
+→ Agent: "web-research skill matches, reading SKILL.md..."
+```
+
+#### 3️⃣ Execution (사용)
+
+Agent가 Skill의 instructions를 따라 작업을 수행하며, 필요시 bundled files나 scripts를 로드합니다.
+
+```
+Agent: Following web-research skill instructions:
+1. Identify research goals
+2. Conduct searches
+3. Synthesize findings
+```
 
 ---
 
-## 핵심 철학
+## 📦 두 가지 구현
 
-이 구현체는 다음의 핵심 원칙을 따릅니다:
+| 구현 | 디렉토리 | 코드량 | 특징 | 추천 대상 |
+|------|---------|--------|------|----------|
+| **⭐ Skills Middleware** | [`skills_middleware/`](skills_middleware/) | ~500 lines | 표준 구현 | **대부분의 사용자** |
+| **🏗️ Advanced Skills** | [`agent_skills/`](agent_skills/) | ~1,500+ lines | 고급 기능 | 명시적 제어 필요시 |
 
-### 1. Progressive Disclosure (점진적 공개)
+### Skills Middleware (표준 구현)
 
-**Progressive Disclosure** 패턴을 따릅니다. 최소한의 metadata만 먼저 로드하고, 전체 내용은 필요할 때만 로드합니다:
-
-- **Phase 1 (Discovery)**: Skill 이름과 description만 로드 (~100 tokens/skill)
-- **Phase 2 (Activation)**: Skill이 활성화될 때 전체 instructions 로드 (<5000 tokens)
-- **Phase 3 (Resources)**: 필요할 때만 resource 파일 로드 (on-demand)
-
-### 2. Skills as Meta-Tools
-
-Skill은 실행 가능한 코드가 **아닙니다**. Skill은:
-- **프롬프트 템플릿**: 도메인 특화 instructions
-- **단일 tool 패턴**: 하나의 `skill` tool이 모든 skill 관리
-- **LLM 기반 선택**: Agent가 자연스럽게 적절한 skill 선택
-- **Context 확장**: Skill이 전문화된 instructions를 agent context에 주입
-
-### 3. Progressive Disclosure 구현
-
-AgentSkills.io의 3단계 로딩 패턴을 구현합니다:
-
-**Phase 1 - Metadata (~100 tokens)**: Discovery 시 `name`, `description`만 로드
-**Phase 2 - Instructions (<5000 tokens)**: Activation 시 SKILL.md body 로드
-**Phase 3 - Resources (as needed)**: `scripts/`, `references/`, `assets/`에서 필요한 파일만 로드
-
-```
-agentskills/
-├── models.py       # SkillProperties (Phase 1 metadata)
-├── parser.py       # read_metadata, read_instructions, read_resource
-├── validator.py    # AgentSkills.io 표준 검증
-├── discovery.py    # 스킬 디렉토리 스캔 (Phase 1)
-├── tool.py         # 활성화 로직 (Phase 2)
-├── prompt.py       # 시스템 프롬프트 생성
-└── errors.py       # 예외 계층 구조
-```
-
-### 4. 표준 준수
-
-[AgentSkills.io](https://agentskills.io) 표준을 완전히 구현:
-- SKILL.md 형식 (YAML frontmatter + Markdown)
-- 필수 필드: `name`, `description`
-- 선택 필드: `license`, `compatibility`, `allowed-tools`, `metadata`
-- 이름 검증 (kebab-case, 최대 64자)
-- Progressive disclosure 패턴
-- 보안 (경로 탐색 방지, 파일 크기 제한)
-
-
-## Progressive Disclosure 작동 방식
-
-### Phase 1: Discovery (시작 시)
+Claude Code의 공식 패턴을 따르는 표준 구현입니다.
 
 ```python
-# 모든 Skill의 metadata만 로드
-skills = discover_skills("./skills")  # ~100 tokens/skill
-```
+from skills_middleware import SkillsMiddleware
+from strands.agent import Agent
+from strands.tools.read import read_file
 
-### Phase 2: Activation (필요 시)
+# Middleware로 Skills 활성화
+middleware = SkillsMiddleware(skills_dir="./skills")
 
-```python
-# Tool을 통해 자동
-response = await agent.invoke_async("web-research 스킬 사용해줘")
-
-# 수동
-instructions = read_instructions(skill.path)  # <5000 tokens/skill
-```
-
-### Phase 3: Resources (참조 시)
-
-```python
-# 특정 파일만 필요할 때 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
-```
-
-## 토큰 효율성
-
-Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
-
-| Phase | 시점 | 내용 | 토큰 |
-|-------|------|------|------|
-| 1 | 시작 시 | 모든 스킬 metadata | ~100/skill |
-| 2 | 활성화 시 | 단일 스킬 instructions | <5000 |
-| 3 | 필요 시 | 개별 resource 파일 | 가변 |
-
-**10개 스킬 예시:**
-- Phase 1: ~1,000 tokens (모든 스킬)
-- Phase 2: ~3,000 tokens (1개 활성화)
-- Phase 3: ~500 tokens (2개 resource)
-- **총합: ~4,500 tokens** (vs Progressive Disclosure 없이 ~50,000 tokens!)
-
-## 보안
-
-내장 보안 기능:
-- **경로 검증**: 디렉토리 탐색 공격 방지
-- **파일 크기 제한**: 대용량 파일 로딩 방지 (최대 10MB)
-- **엄격한 검증**: Agent Skills 표준 강제
-- **명확한 에러**: 실패 시 명확한 피드백
-
-## 아키텍처
-
-### 완전한 모듈 구조
-
-```
-agentskills/
-├── __init__.py      # Public API (16개 exports)
-├── models.py        # SkillProperties (Phase 1 metadata)
-├── parser.py        # read_metadata, read_instructions, read_resource
-├── validator.py     # 표준 검증
-├── discovery.py     # 스킬 스캔 (Phase 1)
-├── tool.py          # 활성화 (Phase 2)
-├── prompt.py        # 시스템 프롬프트 생성
-└── errors.py        # 예외 계층 구조
-```
-
-### Progressive Disclosure 데이터 흐름
-
-```
-Phase 1: Discovery (~100 tokens/skill)
-┌─────────────┐
-│ skills_dir  │
-│  ├── skill-a│
-│  └── skill-b│
-└──────┬──────┘
-       │ read_metadata()
-       ▼
-┌──────────────────┐
-│ SkillProperties[]│  name, description, path, skill_dir
-└──────┬───────────┘
-       │
-       ├──────────────┬────────────┐
-       ▼              ▼            ▼
-   ┌────────┐   ┌────────┐   ┌────────┐
-   │prompt  │   │tool    │   │Agent   │
-   └────────┘   └────┬───┘   └───┬────┘
-                     │            │
-                     │ Phase 2: Activation (<5000 tokens)
-                     ▼            │
-              read_instructions() │
-                     │            │
-                     └────────────┘
-                     │
-                     │ Phase 3: Resources (as needed)
-                     ▼
-              read_resource("scripts/helper.py")
-              read_resource("references/api.md")
-```
-
-## 설치
-
-```bash
-pip install strands strictyaml
-pip install -e ./agentskills
-```
-
-## 빠른 시작
-
-### 기본 사용법
-
-```python
-from agentskills import discover_skills, create_skill_tool, generate_skills_prompt
-from strands import Agent
-
-# 1. Skill discovery
-skills = discover_skills("./skills")
-
-# 2. Skill tool 생성
-skill_tool = create_skill_tool(skills, "./skills")
-
-# 3. System prompt 생성
-base_prompt = "당신은 도움이 되는 AI 어시스턴트입니다."
-skills_prompt = generate_skills_prompt(skills)
-full_prompt = base_prompt + "\n\n" + skills_prompt
-
-# 4. Agent 생성
+# Agent가 자동으로 skill 활용
 agent = Agent(
-    system_prompt=full_prompt,
-    tools=[skill_tool],
-    model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    tools=[read_file],  # Agent가 SKILL.md 읽기 위해 필요
+    middlewares=[middleware]
 )
 
-# 5. Agent 사용
-response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
+# Model-invoked: Agent가 스스로 Skill 선택
+result = agent("Research quantum computing trends")
 ```
 
-## 핵심 API
+**특징:**
+- ✅ **Model-invoked**: Agent가 자동으로 Skill 선택
+- ✅ **Progressive Disclosure**: 필요한 시점에만 로드
+- ✅ **Claude Code 패턴**: 공식 구현과 동일한 방식
+- ✅ 간단한 설정 (3 steps)
+- ✅ 높은 Agent 자율성
 
-### Progressive Disclosure 함수들
+👉 [Skills Middleware 문서](skills_middleware/README.md)
 
-API는 3단계 패턴을 따릅니다:
+### Advanced Skills (고급 구현)
 
-#### Phase 1: Discovery (metadata만)
+명시적 제어와 상태 관리가 필요한 경우를 위한 구현입니다.
 
 ```python
-from agentskills import discover_skills, read_metadata
+from agent_skills import SkillSystem, use_skill
+from pathlib import Path
 
-# 모든 Skill discovery - metadata만 로드 (~100 tokens/skill)
-skills = discover_skills("./skills")
+system = SkillSystem(Path("./skills"))
+system.discover_skills()
 
-# 또는 단일 스킬 metadata 읽기
-skill = read_metadata(Path("./skills/web-research"))
+agent = Agent(tools=[use_skill])
 
-for skill in skills:
-    print(f"{skill.name}: {skill.description}")
-    print(f"  경로: {skill.path}")
+# Tool-based: 명시적 tool 호출
+result = agent("Research quantum computing", skill_system=system)
 ```
 
-#### Phase 2: Activation (Instructions 로드)
+**특징:**
+- ✅ 명시적 상태 관리 (Registry)
+- ✅ Skill 활성화 캐싱
+- ✅ Sub-agent 격리 실행
+- ✅ Tool 기반 명시적 호출
 
-```python
-from agentskills import read_instructions
+👉 [Advanced Skills 문서](agent_skills/README.md)
 
-# Skill activation 시 instructions 로드
-instructions = read_instructions(skill.path)
-print(instructions)  # frontmatter 제외한 Markdown body
+---
+
+## 🎯 어떤 구현을 선택해야 할까요?
+
+### 📊 비교
+
+| 항목 | Skills Middleware | Advanced Skills |
+|------|-------------------|-----------------|
+| **작동 방식** | Model-invoked (자동) | Tool-based (명시적) |
+| **Claude Code 패턴** | ✅ 완전 일치 | ⚠️ 커스텀 구현 |
+| **Agent 자율성** | ✅ 높음 | ⚠️ 제한적 |
+| **설정 복잡도** | ✅ 낮음 (3 steps) | ⚠️ 높음 (4+ steps) |
+| **코드량** | 500 lines | 1,500+ lines |
+| **상태 관리** | ❌ 없음 | ✅ Registry |
+| **Sub-agent 격리** | ❌ 없음 | ✅ 있음 |
+
+### 권장 선택
+
+**→ 대부분의 경우 `skills_middleware` 사용을 권장합니다.**
+
+- ✅ Claude Code의 공식 패턴
+- ✅ Agent가 스스로 Skill 선택
+- ✅ 더 간단하고 유지보수하기 쉬움
+
+**`agent_skills`는 다음이 필요한 경우:**
+
+- Skill 사용 추적이 중요
+- Sub-agent 격리 실행 필요
+- 명시적 제어 선호
+
+---
+
+## 🚀 빠른 시작
+
+### Skills Middleware (권장)
+
+**1. 설치**
+```bash
+pip install strands pyyaml
 ```
 
-#### Phase 3: Resources (필요시 로드)
+**2. Skill 생성**
 
-```python
-from agentskills import read_resource
-
-# 필요한 resource 파일 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
-helper_script = read_resource(skill.skill_dir, "scripts/helper.py")
-```
-
-### create_skill_tool(skills, skills_dir)
-
-Skill activation를 위한 Strands `@tool` 생성 (Phase 2 자동 처리).
-
-```python
-from agentskills import create_skill_tool
-from strands import Agent
-
-skill_tool = create_skill_tool(skills, "./skills")
-
-agent = Agent(tools=[skill_tool])
-
-# Agent는 다음과 같이 tool 사용:
-# - skill(skill_name="web-research", action="list")
-# - skill(skill_name="web-research", action="info")
-# - skill(skill_name="web-research", action="activate")
-```
-
-### generate_skills_prompt(skills)
-
-Skill을 LLM용 시스템 프롬프트로 변환.
-
-```python
-from agentskills import generate_skills_prompt
-
-prompt = generate_skills_prompt(skills)
-print(prompt)
-```
-
-### validate(skill_dir)
-
-Agent Skills 표준에 따라 스킬 디렉토리 검증.
-
-```python
-from agentskills import validate
-
-errors = validate("./skills/web-research")
-if not errors:
-    print("✅ 유효한 스킬입니다")
-else:
-    for error in errors:
-        print(f"❌ {error}")
-```
-
-## SKILL.md 형식
-
+`skills/web-research/SKILL.md`:
 ```markdown
 ---
 name: web-research
-description: 웹 검색과 분석을 통해 포괄적인 리서치 수행
-allowed-tools: WebFetch, Grep
-license: MIT
+description: Structured approach to conducting thorough web research
 ---
 
-# instructions
+# Web Research Skill
 
-이 Skill을 사용하면...
+## When to Use
+- User asks to research a topic
+- Need to gather information from sources
 
-## 1단계: 검색
+## How to Use
 
-...
+### Step 1: Identify Research Goals
+Define what you're trying to learn...
+
+### Step 2: Conduct Searches
+Use available tools to search...
+
+### Step 3: Synthesize Findings
+Organize and summarize results...
+
+## Best Practices
+- Verify sources
+- Cross-reference information
+- Cite sources properly
 ```
 
-### 필수 필드
+**3. Agent 생성**
+```python
+from skills_middleware import SkillsMiddleware
+from strands.agent import Agent
+from strands.tools.read import read_file
 
-- `name`: kebab-case 형식 (예: `web-research`)
-- `description`: Skill의 기능과 사용 시기
+middleware = SkillsMiddleware("./skills")
+agent = Agent(
+    tools=[read_file],  # Required for reading SKILL.md
+    middlewares=[middleware]
+)
 
-### 선택 필드
+# Agent automatically uses skills when appropriate
+result = agent("Research the latest AI developments")
+print(result.message)
+```
 
-- `license`: 스킬 라이센스
-- `compatibility`: 호환성 정보
-- `allowed-tools`: Skill이 사용할 수 있는 tool 패턴
-- `metadata`: 사용자 정의 key-value 쌍
+### Advanced Skills
 
-## 예제
+자세한 내용은 [agent_skills/README.md](agent_skills/README.md)를 참고하세요.
 
-완전한 예제는 [examples/](examples/)를 참고하세요:
+---
 
-- **[basic_usage.py](examples/basic_usage.py)** - Strands SDK와 간단한 통합
-- **[progressive_disclosure_demo.py](examples/progressive_disclosure_demo.py)** - Progressive Disclosure 완전 데모
-- **[api_usage_demo.py](examples/api_usage_demo.py)** - API 실행 예제
-- **[api_usage_demo.py](examples/strands_integration.py)** - Strands Agent와 Progressive Disclosure의 완전한 통합
+## 📚 How Skills Work (상세)
 
-## 라이센스
+### Phase 1: Discovery
 
-MIT License - 자세한 내용은 LICENSE 파일 참조
+**시기**: Agent 초기화 시
+**로드**: 메타데이터만 (~100 tokens/skill)
 
-## 링크
+```python
+middleware = SkillsMiddleware("./skills")
+# Loads: name, description, paths for all skills
+```
 
-- [Agent Skills 공식 문서](https://agentskills.io)
-- [Strands Agents SDK 공식 문서](https://strandsagents.com)
-- [examples/README.md](examples/README.md)
+System Prompt에 주입되는 정보:
+```
+Available Skills:
 
+### web-research
+Structured approach to conducting web research
+Read: /path/to/skills/web-research/SKILL.md
+
+### code-review
+Systematic code review with best practices
+Read: /path/to/skills/code-review/SKILL.md
+```
+
+### Phase 2: Activation
+
+**시기**: 요청이 Skill 설명과 매칭될 때
+**로드**: 전체 SKILL.md (~5k tokens)
+
+```
+User: "Can you research quantum computing trends?"
+
+Agent (internal):
+1. Checks available skills in system prompt
+2. "web-research" description matches "research" request
+3. Uses read_file tool to load SKILL.md
+4. SKILL.md content now in context
+```
+
+### Phase 3: Execution
+
+**시기**: Activation 후
+**로드**: Supporting files as needed
+
+```
+Agent (following SKILL.md instructions):
+1. Identify research goals (from Step 1)
+2. Conduct searches (from Step 2)
+3. May access scripts/helper.py if referenced
+4. Synthesize findings (from Step 3)
+```
+
+---
+
+## 🏗️ Skill 작성 가이드
+
+### SKILL.md 구조
+
+```markdown
+---
+name: skill-name              # Required: lowercase, hyphens
+description: Brief description # Required: what and when
+allowed-tools: Read, Write    # Optional: pre-approved tools
+model: claude-opus-4          # Optional: preferred model
+---
+
+# Skill Title
+
+## Description
+Detailed explanation of what this skill does.
+
+## When to Use
+- Scenario 1 where this applies
+- Scenario 2 where this is helpful
+- Keywords users might say
+
+## How to Use
+
+### Step 1: [First Action]
+Clear instructions...
+
+### Step 2: [Next Action]
+More instructions...
+
+### Step 3: [Final Action]
+Completion steps...
+
+## Best Practices
+- Practice 1
+- Practice 2
+
+## Examples
+
+### Example 1: [Scenario]
+**User:** "example request"
+**Approach:**
+1. Step...
+2. Step...
+```
+
+### 디렉토리 구조
+
+```
+skills/
+├── web-research/
+│   ├── SKILL.md              # Required
+│   ├── scripts/              # Optional
+│   │   └── helper.py
+│   └── references/           # Optional
+│       └── apis.md
+└── code-review/
+    └── SKILL.md
+```
+
+### 작성 팁
+
+#### Description 작성
+
+사용자가 자연스럽게 사용할 키워드를 포함하세요:
+
+**Good:**
+```yaml
+description: Structured approach to conducting thorough web research, including search strategies and source verification
+```
+
+Agent가 "research", "search", "investigate" 등의 요청에 매칭합니다.
+
+**Bad:**
+```yaml
+description: A skill for finding things online
+```
+
+너무 모호하여 매칭이 어렵습니다.
+
+#### When to Use 작성
+
+구체적인 시나리오를 나열하세요:
+
+```markdown
+## When to Use
+- User asks to "research [topic]"
+- User needs to "find information about [subject]"
+- User wants to "investigate [question]"
+```
+
+---
+
+## 🔍 주요 차이점
+
+### 실행 방식
+
+**Skills Middleware (Model-invoked):**
+```
+User Request
+   ↓
+Agent sees skills in system prompt
+   ↓
+Agent matches request to skill description
+   ↓
+Agent reads SKILL.md with read_file tool
+   ↓
+Agent follows instructions
+   ↓
+Result
+```
+
+**Advanced Skills (Tool-based):**
+```
+User Request
+   ↓
+Agent invokes use_skill tool
+   ↓
+Sub-agent created with SKILL.md
+   ↓
+Sub-agent executes
+   ↓
+Result returned to main agent
+```
+
+### 코드 구조
+
+**Skills Middleware:** 단순
+```
+loader.py      (~260 lines) - SKILL.md 파싱
+middleware.py  (~200 lines) - System prompt 주입
+__init__.py    (~40 lines)  - API exports
+```
+
+**Advanced Skills:** 복잡
+```
+loader.py      - Filesystem operations
+registry.py    - State management
+executor.py    - Sub-agent creation
+system.py      - Unified facade
+tool.py        - Tool definitions
+models.py      - Data models
+utils/         - Utilities
+```
+
+---
+
+## 📖 문서
+
+### Skills Middleware
+- [README](skills_middleware/README.md) - 전체 문서
+- [Examples](skills_middleware/example.py) - 사용 예제
+- [Tests](skills_middleware/test_basic.py) - 테스트
+
+### Advanced Skills
+- [README](agent_skills/README.md) - 전체 문서
+- [Architecture](agent_skills/README.md#아키텍처) - 설계 상세
+
+### 비교
+- [COMPARISON](skills_middleware/COMPARISON.md) - 상세 비교 분석
+
+---
+
+## 📖 참고 자료
+
+- [Claude Code: Skills Explained](https://www.claude.com/blog/skills-explained)
+- [Strands Agents SDK](https://github.com/strands-ai/strands)
+- [deepagents-cli](ref/deepagents/) - 참고 구현
+
+---
+
+## 🤝 기여
+
+Issues와 PR을 환영합니다!
+
+```bash
+git clone https://github.com/yourusername/strands-agent-skills.git
+cd strands-agent-skills
+
+pip install -e .
+pytest skills_middleware/test_basic.py -v
+```
+
+---
+
+## 📄 라이선스
+
+MIT License
+
+---
+
+## ❓ FAQ
+
+**Q: 어떤 구현을 사용해야 하나요?**
+A: 대부분 `skills_middleware`를 권장합니다. Claude Code의 표준 패턴이고 더 간단합니다.
+
+**Q: Skills는 어떻게 작동하나요?**
+A: Model-invoked 방식입니다. Agent가 system prompt의 skill 목록을 보고, 요청과 매칭되면 자동으로 SKILL.md를 읽어 사용합니다.
+
+**Q: Skill이 자동으로 선택되지 않으면?**
+A: Description을 사용자가 자연스럽게 사용할 키워드로 개선하세요. "research", "analyze" 등 동사를 포함하세요.
+
+**Q: 두 구현의 SKILL.md 형식은 같나요?**
+A: 네, 완전히 동일합니다. Skills를 재사용할 수 있습니다.
+
+**Q: 성능 차이가 있나요?**
+A: Skills Middleware는 메모리를 덜 사용하고, Advanced는 캐싱으로 재사용시 빠릅니다. 실제로는 거의 차이 없습니다.
+
+---
+
+**Happy Coding! 🎉**
+
+*Start with `skills_middleware` - the standard way to use Skills with Strands SDK*

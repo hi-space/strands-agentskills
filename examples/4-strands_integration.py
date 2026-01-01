@@ -1,9 +1,9 @@
 """Complete example of using Agent Skills with Strands Agents SDK
 
 This example demonstrates the complete Progressive Disclosure pattern:
-- Phase 1: Discovery (load metadata only)
-- Phase 2: Activation (load instructions on demand)
-- Phase 3: Resources (load files when needed)
+- Phase 1: Discovery (load metadata only in system prompt)
+- Phase 2: LLM reads SKILL.md when needed (true progressive disclosure)
+- Phase 3: LLM reads resources when needed (scripts, references)
 """
 
 import asyncio
@@ -14,12 +14,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from strands import Agent
+from strands_tools import file_read
 from agentskills import (
     discover_skills,
-    create_skill_tool,
     generate_skills_prompt,
-    read_instructions,
-    read_resource,
 )
 
 
@@ -60,22 +58,19 @@ async def example_phase1_discovery():
 
 
 async def example_phase2_activation(skills, skills_dir):
-    """Example: Phase 2 - Activate skill and load instructions"""
+    """Example: Phase 2 - LLM reads skills when needed (True Progressive Disclosure)"""
     print("=" * 60)
-    print("Phase 2: Activation (Load Instructions)")
+    print("Phase 2: LLM-Driven Progressive Disclosure")
     print("=" * 60)
 
-    # Create skill tool (handles Phase 2 automatically)
-    skill_tool = create_skill_tool(skills, skills_dir)
-
-    # Create agent with skill tool
+    # Create agent with file_read tool (LLM will read SKILL.md when needed)
     base_prompt = "You are a helpful AI assistant with access to specialized skills."
     skills_prompt = generate_skills_prompt(skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
 
     agent = Agent(
         system_prompt=full_prompt,
-        tools=[skill_tool],
+        tools=[file_read],  # LLM uses this to read SKILL.md
         model="anthropic.claude-3-5-sonnet-20241022-v2:0",
     )
 
@@ -83,31 +78,34 @@ async def example_phase2_activation(skills, skills_dir):
     response = await agent.invoke_async("What skills do you have?")
     print_response(response)
 
-    # Manual Phase 2: Load instructions directly
+    print("\n" + "=" * 60)
+    print("Now asking agent to use a skill...")
+    print("=" * 60)
+
     if skills:
-        print("\n" + "=" * 60)
-        print("Manual Phase 2: Reading instructions directly")
-        print("=" * 60)
         first_skill = skills[0]
-        instructions = read_instructions(first_skill.path)
-        print(f"\nInstructions for '{first_skill.name}':")
-        print(f"Length: {len(instructions)} chars")
-        print(f"Preview: {instructions[:200]}...")
+        print(f"\nAsking: 'Can you show me how to use the {first_skill.name} skill?'\n")
+        response = await agent.invoke_async(
+            f"Can you show me how to use the {first_skill.name} skill?"
+        )
+        print_response(response)
+        print("\n✓ Agent read the SKILL.md only when needed (true progressive disclosure)")
 
     return agent
 
 
 async def example_phase3_resources(skills):
-    """Example: Phase 3 - Load resource files on demand"""
+    """Example: Phase 3 - LLM reads resource files when needed"""
     print("\n" + "=" * 60)
-    print("Phase 3: Resources (Load on Demand)")
+    print("Phase 3: Resources (LLM reads on demand)")
     print("=" * 60)
 
     if not skills:
         print("No skills available to demonstrate Phase 3")
         return
 
-    # Find a skill with resources
+    # Show available resources
+    print("\nAvailable resources that LLM can read when needed:")
     for skill in skills:
         skill_dir = Path(skill.skill_dir)
 
@@ -116,29 +114,21 @@ async def example_phase3_resources(skills):
         if scripts_dir.exists() and scripts_dir.is_dir():
             script_files = list(scripts_dir.glob("*.py"))
             if script_files:
-                print(f"\nSkill '{skill.name}' has scripts:")
+                print(f"\n📦 Skill '{skill.name}' - scripts/")
                 for script in script_files[:3]:  # Show first 3
-                    try:
-                        content = read_resource(skill.skill_dir, f"scripts/{script.name}")
-                        print(f"  📄 scripts/{script.name} ({len(content)} chars)")
-                    except Exception as e:
-                        print(f"  ⚠️  scripts/{script.name}: {e}")
+                    print(f"  📄 {script}")
 
         # Check for references/
         references_dir = skill_dir / "references"
         if references_dir.exists() and references_dir.is_dir():
             ref_files = list(references_dir.glob("*"))
             if ref_files:
-                print(f"\nSkill '{skill.name}' has references:")
+                print(f"\n📦 Skill '{skill.name}' - references/")
                 for ref in ref_files[:3]:  # Show first 3
                     if ref.is_file():
-                        try:
-                            content = read_resource(
-                                skill.skill_dir, f"references/{ref.name}"
-                            )
-                            print(f"  📄 references/{ref.name} ({len(content)} chars)")
-                        except Exception as e:
-                            print(f"  ⚠️  references/{ref.name}: {e}")
+                        print(f"  📄 {ref}")
+
+    print("\n✓ LLM will read these files using file_read tool only when needed")
 
 
 async def example_interactive_chat(agent):
