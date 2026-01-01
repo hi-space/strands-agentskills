@@ -81,15 +81,15 @@ async def main():
     # 6. Example: LLM will use skill tool to load instructions
     if skills:
         print("\n" + "=" * 60)
-        print("Example 2: LLM uses skill tool for instructions")
+        print("Example 2: LLM loads skill instructions on demand")
         print("=" * 60)
         first_skill = skills[0]
-        print(f"\nAsking: 'How do I use the {first_skill.name} skill?'\n")
+        print(f"\nAsking: 'Load the {first_skill.name} skill and show me how to use it'\n")
         response = await agent.invoke_async(
-            f"How do I use the {first_skill.name} skill?"
+            f"Load the {first_skill.name} skill and show me how to use it"
         )
         print_response(response)
-        print("\n✓ LLM used skill tool to load instructions (progressive disclosure)")
+        print("\n✓ LLM used skill(skill_name=...) to load instructions (Phase 2 of Progressive Disclosure)")
 
 
 if __name__ == "__main__":

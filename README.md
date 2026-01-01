@@ -94,7 +94,7 @@ response = await agent.invoke_async("web-research 스킬 사용해줘")
 # → LLM이 file_read로 SKILL.md 읽음
 
 # Tool-based: skill 도구 사용
-instructions = skill(skill_name="web-research", action="instructions")
+instructions = skill(skill_name="web-research")
 
 # 또는 프로그래밍 방식으로 직접 읽기
 instructions = read_instructions(skill.path)  # <5000 tokens/skill
@@ -242,7 +242,7 @@ agent = Agent(
 
 # Progressive Disclosure 작동:
 # Phase 1: 시스템 프롬프트에 metadata
-# Phase 2: skill(skill_name="web-research", action="instructions")
+# Phase 2: skill(skill_name="web-research")
 # Phase 3: file_read로 resources 읽기
 response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
 ```
@@ -307,17 +307,15 @@ agent = Agent(
     tools=[skill_tool, file_read]
 )
 
-# LLM이 사용 가능한 actions:
-# - skill(skill_name="web-research", action="list")      # 모든 스킬 목록
-# - skill(skill_name="web-research", action="info")      # 메타데이터만
-# - skill(skill_name="web-research", action="instructions")  # instructions 로드
+# LLM이 사용하는 방법:
+# - skill(skill_name="web-research")  # instructions 로드
 # - file_read(path="/path/to/skill/scripts/helper.py")  # resources 읽기
 ```
 
 **Progressive Disclosure:**
-- Phase 1: 메타데이터 (시스템 프롬프트)
-- Phase 2: `action="instructions"`로 instructions만 로드
-- Phase 3: `file_read`로 resources 읽기
+- Phase 1: 메타데이터 (시스템 프롬프트) - ~100 tokens/skill
+- Phase 2: `skill(skill_name="...")`로 instructions 로드 - <5000 tokens
+- Phase 3: `file_read`로 resources 읽기 - 필요시만
 
 ### generate_skills_prompt(skills)
 

@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
     """Create a Strands tool for skill activation
 
-    This factory function creates a tool that implements:
-    - Single "skill" dispatcher tool (meta-tool pattern)
-    - Progressive disclosure (metadata → full content on activation)
-    - Three actions: list, info, activate
+    This factory function creates a tool that implements Progressive Disclosure:
+    - Phase 1: Metadata in system prompt (already loaded)
+    - Phase 2: Load full instructions when skill is invoked
+    - Phase 3: LLM uses file_read to access resources as needed
 
     Args:
         skills: List of discovered skill properties
@@ -34,12 +34,13 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
     Example:
         >>> from agentskills import discover_skills, create_skill_tool
         >>> from strands import Agent
+        >>> from strands_tools import file_read
         >>>
         >>> skills = discover_skills("./skills")
         >>> skill_tool = create_skill_tool(skills, "./skills")
         >>>
         >>> agent = Agent(
-        ...     tools=[skill_tool, read_tool, bash_tool]
+        ...     tools=[skill_tool, file_read]
         ... )
     """
     skills_dir = Path(skills_dir).expanduser().resolve()
@@ -48,76 +49,19 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
     skill_map = {skill.name: skill for skill in skills}
 
     @tool
-    def skill(
-        skill_name: str,
-        action: str = "instructions",
-    ) -> str:
-        """Access specialized agent skills with progressive disclosure
-
-        Skills are specialized instruction sets that provide domain expertise
-        and structured workflows. Use this tool to load skill content progressively.
+    def skill(skill_name: str) -> str:
+        """Load specialized skill instructions.
 
         Args:
-            skill_name: The name of the skill (from available_skills list)
-            action: What to load:
-                   - "info": Show metadata only (name, description, paths)
-                   - "instructions" (default): Load skill instructions
-                   - "list": Show all available skills
+            skill_name: Name of the skill (see system prompt for available skills)
 
         Returns:
-            For 'info': Metadata including skill directory path
-            For 'instructions': Full skill instructions from SKILL.md
-            For 'list': Formatted list of all available skills
-
-        Progressive Disclosure Pattern:
-            Phase 1: Metadata already in system prompt
-            Phase 2: skill(skill_name="web-research", action="instructions")
-            Phase 3: Use file_read to access resources in skill directory
+            Full skill instructions with resource access information
 
         Example:
-            1. skill(skill_name="web-research", action="instructions")
-            2. Follow the instructions provided
-            3. Read resources: file_read(path="/path/to/skill/scripts/helper.py")
+            skill(skill_name="web-research")
         """
-        # Handle list action
-        if action == "list":
-            if not skills:
-                return "No skills available. Check the skills directory."
-
-            lines = ["Available Skills:\n"]
-            for s in sorted(skills, key=lambda x: x.name):
-                lines.append(f"- {s.name}")
-                lines.append(f"  {s.description}")
-                lines.append(f"  Location: {s.path}\n")
-            return "\n".join(lines)
-
-        # Handle info action
-        if action == "info":
-            if skill_name not in skill_map:
-                available = ", ".join(skill_map.keys())
-                return (
-                    f"Skill '{skill_name}' not found.\n"
-                    f"Available skills: {available}"
-                )
-
-            skill_props = skill_map[skill_name]
-            info_lines = [
-                f"Skill: {skill_props.name}",
-                f"Description: {skill_props.description}",
-                f"SKILL.md: {skill_props.path}",
-                f"Directory: {skill_props.skill_dir}",
-            ]
-
-            if skill_props.allowed_tools:
-                info_lines.append(f"Allowed Tools: {skill_props.allowed_tools}")
-            if skill_props.compatibility:
-                info_lines.append(f"Compatibility: {skill_props.compatibility}")
-            if skill_props.license:
-                info_lines.append(f"License: {skill_props.license}")
-
-            return "\n".join(info_lines)
-
-        # Handle instructions action (default) - Phase 2: Load instructions
+        # Validate skill exists
         if skill_name not in skill_map:
             available = ", ".join(skill_map.keys())
             raise SkillNotFoundError(
@@ -132,7 +76,7 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
             from .parser import read_instructions
 
             instructions = read_instructions(skill_props.path)
-            logger.info(f"Loading instructions for skill: {skill_name}")
+            logger.info(f"Loaded skill: {skill_name}")
 
             # Build response with header and instructions
             header = (
@@ -158,7 +102,7 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
             return header + instructions
 
         except Exception as e:
-            logger.error(f"Error loading skill instructions {skill_name}: {e}", exc_info=True)
+            logger.error(f"Error loading skill '{skill_name}': {e}", exc_info=True)
             raise SkillActivationError(
                 f"Failed to load skill '{skill_name}': {e}"
             ) from e
