@@ -1,11 +1,12 @@
 """Streamlit Demo - Progressive Disclosure 시각화
 
 이 Streamlit 앱은 Agent Skills의 Progressive Disclosure가 어떻게 작동하는지
-시각적으로 보여줍니다. 각 Phase에서 무엇이 로드되고, prompt에 어떻게 포함되는지
-실시간으로 확인할 수 있습니다.
+시각적으로 보여줍니다. 실제 Strands Agents SDK를 사용하여 질의를 받고
+자동으로 Phase 1->2->3을 순차적으로 수행하는 과정을 실시간으로 확인할 수 있습니다.
 """
 
 import sys
+import time
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -17,6 +18,7 @@ from agentskills import (
     generate_skills_prompt,
     load_instructions,
     load_resource,
+    create_skill_tool,
 )
 
 # 페이지 설정
@@ -62,86 +64,14 @@ def init_tracking():
                 "initial_system_prompt": "",
                 "tool_results": [],
             },
+            "agent_responses": [],
+            "current_query": "",
+            "is_running": False,
         }
 
 
-def simulate_skill_call(skill_name: str):
-    """Skill 호출 시뮬레이션 - agentskills 함수만 사용"""
-    skill = next((s for s in st.session_state.skills if s.name == skill_name), None)
-    if not skill:
-        return None
-    
-    # Phase 2: Instructions 로드
-    instructions = load_instructions(skill.path)
-    
-    header = (
-        f"# Skill: {skill.name}\n\n"
-        f"**Description:** {skill.description}\n\n"
-        f"**Skill Directory:** `{skill.skill_dir}/`\n\n"
-    )
-    
-    if skill.allowed_tools:
-        header += f"**IMPORTANT:** Only use these tools: `{skill.allowed_tools}`\n\n"
-    
-    skill_dir = Path(skill.skill_dir)
-    resources = []
-    for subdir in ["scripts", "references", "assets"]:
-        resource_dir = skill_dir / subdir
-        if resource_dir.exists() and resource_dir.is_dir():
-            for file_path in sorted(resource_dir.rglob("*")):
-                if file_path.is_file():
-                    resources.append(str(file_path.absolute()))
-    
-    if resources:
-        header += "**Available Resources:**\n"
-        for resource in resources:
-            header += f"- `{resource}`\n"
-        header += "\n"
-    
-    header += "---\n\n# Instructions\n\n"
-    result = header + instructions
-    
-    # Tracker에 추가
-    st.session_state.tracker["skill_calls"].append({
-        "skill_name": skill_name,
-        "phase": 2,
-    })
-    
-    st.session_state.tracker["prompt_content"]["tool_results"].append({
-        "type": "skill",
-        "skill_name": skill_name,
-        "content": result,
-        "tokens": estimate_tokens(result),
-    })
-    
-    return result
 
 
-def simulate_file_read(file_path: Path, skill_dir: Path, rel_path: str):
-    """File read 호출 시뮬레이션 - agentskills 함수만 사용"""
-    try:
-        # load_resource를 사용하여 파일 읽기 (상대 경로 사용)
-        content = load_resource(str(skill_dir), rel_path)
-        
-        # Tracker에 추가
-        st.session_state.tracker["file_read_calls"].append({
-            "path": str(file_path),
-            "rel_path": rel_path,
-            "phase": 3,
-        })
-        
-        st.session_state.tracker["prompt_content"]["tool_results"].append({
-            "type": "file_read",
-            "path": str(file_path),
-            "rel_path": rel_path,
-            "content": content,
-            "tokens": estimate_tokens(content),
-        })
-        
-        return content
-    except Exception as e:
-        st.error(f"파일 읽기 실패: {e}")
-        return None
 
 
 # 메인 타이틀
@@ -257,11 +187,6 @@ def show_phase1():
         st.metric("Prompt 크기", f"~{format_number(prompt_tokens)} tokens")
         st.metric("문자 수", f"{len(full_prompt):,}")
     
-    # Phase 2로 진행 버튼
-    if st.button("➡️ Phase 2로 진행", use_container_width=True, type="primary", key="goto_phase2"):
-        st.session_state.current_phase = "Phase 2"
-        st.rerun()
-
 
 # Phase 2: Activation
 def show_phase2():
@@ -296,7 +221,24 @@ def show_phase2():
     )
     
     if st.button("🎯 Skill 활성화 시뮬레이션", use_container_width=True, type="primary", key="simulate_skill_activation"):
-        result = simulate_skill_call(selected_skill)
+        skills_dir = Path(__file__).parent.parent / "skills"
+        skill_tool = create_skill_tool(st.session_state.skills, skills_dir)
+        result = skill_tool(selected_skill)
+        
+        # Tracking
+        if "tracker" in st.session_state:
+            st.session_state.tracker["skill_calls"].append({
+                "skill_name": selected_skill,
+                "phase": 2,
+                "timestamp": time.time(),
+            })
+            st.session_state.tracker["prompt_content"]["tool_results"].append({
+                "type": "skill",
+                "skill_name": selected_skill,
+                "content": result,
+                "tokens": estimate_tokens(result),
+            })
+        
         if result:
             st.success(f"✅ {selected_skill} Skill 활성화 완료! Instructions가 로드되었습니다.")
             st.rerun()
@@ -348,11 +290,6 @@ def show_phase2():
             content = str(result.get("content", ""))
             st.code(content, language="markdown")
     
-    # Phase 3로 진행 버튼
-    if st.button("➡️ Phase 3로 진행", use_container_width=True, key="goto_phase3"):
-        st.session_state.current_phase = "Phase 3"
-        st.rerun()
-
 
 # Phase 3: Resources
 def show_phase3():
@@ -434,7 +371,29 @@ def show_phase3():
             selected_info = next((r for r in resources if r[0] == selected_resource), None)
             if selected_info:
                 rel_path, file_path = selected_info
-                result = simulate_file_read(file_path, skill_dir, rel_path)
+                # load_resource 사용
+                try:
+                    result = load_resource(selected_skill.skill_dir, rel_path)
+                except Exception as e:
+                    result = f"Error reading file: {str(e)}"
+                
+                # Tracking
+                if "tracker" in st.session_state:
+                    file_path_str = str(file_path)
+                    st.session_state.tracker["file_read_calls"].append({
+                        "path": file_path_str,
+                        "rel_path": rel_path,
+                        "phase": 3,
+                        "timestamp": time.time(),
+                    })
+                    st.session_state.tracker["prompt_content"]["tool_results"].append({
+                        "type": "file_read",
+                        "path": file_path_str,
+                        "rel_path": rel_path,
+                        "content": result,
+                        "tokens": estimate_tokens(result),
+                    })
+                
                 if result:
                     st.success("✅ Resource 파일 로드 완료!")
                     st.rerun()
