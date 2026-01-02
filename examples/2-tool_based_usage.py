@@ -45,10 +45,6 @@ async def main():
 
     if not skills:
         print("\n⚠️  No skills found. Create skills in 'skills/' directory.")
-        print("Example structure:")
-        print("  skills/")
-        print("    web-research/")
-        print("      SKILL.md")
         return
 
     # 2. Generate system prompt with skill metadata
@@ -67,7 +63,7 @@ async def main():
     agent = Agent(
         system_prompt=full_prompt,
         tools=[skill_tool, file_read],
-        model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
     # 5. Use the agent

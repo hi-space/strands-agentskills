@@ -212,7 +212,7 @@ full_prompt = base_prompt + "\n\n" + skills_prompt
 agent = Agent(
     system_prompt=full_prompt,
     tools=[file_read],  # LLM이 필요시 SKILL.md 읽음
-    model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
 
 # 4. Progressive Disclosure 작동:
@@ -237,7 +237,7 @@ skill_tool = create_skill_tool(skills, "./skills")
 agent = Agent(
     system_prompt=base_prompt + "\n\n" + generate_skills_prompt(skills),
     tools=[skill_tool, file_read],  # skill + file_read 조합
-    model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
 
 # Progressive Disclosure 작동:

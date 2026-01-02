@@ -65,7 +65,7 @@ async def main():
     agent = Agent(
         system_prompt=full_prompt,
         tools=[file_read],  # LLM reads SKILL.md on demand
-        model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
     # 4. Use the agent

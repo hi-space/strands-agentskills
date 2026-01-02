@@ -146,7 +146,7 @@ def create_agent(skills, skills_dir):
     agent = Agent(
         system_prompt=full_prompt,
         tools=[skill_tool, file_read, file_write],  # 원본 tool 사용
-        model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
         callback_handler=None,  # 스트리밍을 위해 callback handler 비활성화
     )
     

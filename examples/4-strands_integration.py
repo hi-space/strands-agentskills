@@ -8,17 +8,19 @@ This example demonstrates the complete Progressive Disclosure pattern:
 
 import asyncio
 import sys
+import json
 from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from strands import Agent
-from strands_tools import file_read
+from strands_tools import file_read, file_write, shell
 from agentskills import (
     discover_skills,
     generate_skills_prompt,
 )
+from strands_logger import StreamingLogger
 
 
 def print_response(response):
@@ -57,78 +59,93 @@ async def example_phase1_discovery():
     return skills, skills_dir
 
 
-async def example_phase2_activation(skills, skills_dir):
+async def example_phase2_activation(skills, agent):
     """Example: Phase 2 - LLM reads skills when needed (True Progressive Disclosure)"""
     print("=" * 60)
     print("Phase 2: LLM-Driven Progressive Disclosure")
     print("=" * 60)
 
-    # Create agent with file_read tool (LLM will read SKILL.md when needed)
-    base_prompt = "You are a helpful AI assistant with access to specialized skills."
-    skills_prompt = generate_skills_prompt(skills)
-    full_prompt = f"{base_prompt}\n\n{skills_prompt}"
+    # Create streaming logger
+    logger = StreamingLogger()
 
-    agent = Agent(
-        system_prompt=full_prompt,
-        tools=[file_read],  # LLM uses this to read SKILL.md
-        model="anthropic.claude-3-5-sonnet-20241022-v2:0",
-    )
-
-    print("\nAsking agent: 'What skills do you have?'\n")
-    response = await agent.invoke_async("What skills do you have?")
-    print_response(response)
-
+    prompt = "어떤 skill을 사용할 수 있나요?"
+    print(f"\nAsking agent: '{prompt}'\n")
+    
+    # Use streaming to track tool calls and output chunk text
+    async for event in agent.stream_async(prompt):
+        logger.process_event(event)
+    
     print("\n" + "=" * 60)
-    print("Now asking agent to use a skill...")
-    print("=" * 60)
-
+    
     if skills:
         first_skill = skills[0]
-        print(f"\nAsking: 'Can you show me how to use the {first_skill.name} skill?'\n")
-        response = await agent.invoke_async(
-            f"Can you show me how to use the {first_skill.name} skill?"
-        )
-        print_response(response)
+        prompt2 = f"{first_skill.name} skill을 어떻게 사용할 수 있나요?"
+        print(f"\nAsking: {prompt2}\n")
+        
+        # Reset logger for new query
+        logger.reset()
+        
+        # Use streaming to track tool calls and output chunk text
+        async for event in agent.stream_async(prompt2):
+            logger.process_event(event)
+        
         print("\n✓ Agent read the SKILL.md only when needed (true progressive disclosure)")
 
-    return agent
 
-
-async def example_phase3_resources(skills):
-    """Example: Phase 3 - LLM reads resource files when needed"""
+async def example_phase3_resources(skills, agent):
+    """Example: Phase 3 - LLM reads resource files when needed based on SKILL.md instructions"""
     print("\n" + "=" * 60)
-    print("Phase 3: Resources (LLM reads on demand)")
+    print("Phase 3: Resources (LLM reads on demand based on instructions)")
     print("=" * 60)
 
     if not skills:
         print("No skills available to demonstrate Phase 3")
         return
 
-    # Show available resources
-    print("\nAvailable resources that LLM can read when needed:")
+    # Find a skill that mentions resources in its SKILL.md instructions
+    # We'll look for skills that reference scripts/ or references/ in their instructions
+    skill_with_resource_mentions = None
     for skill in skills:
-        skill_dir = Path(skill.skill_dir)
+        skill_path = Path(skill.path)
+        if not skill_path.exists():
+            continue
+            
+        # Read SKILL.md to check if it mentions resources
+        try:
+            content = skill_path.read_text(encoding='utf-8')
+            # Check if instructions mention scripts or references
+            if 'scripts/' in content.lower() or 'references/' in content.lower():
+                skill_with_resource_mentions = skill
+                break
+        except Exception:
+            continue
 
-        # Check for scripts/
-        scripts_dir = skill_dir / "scripts"
-        if scripts_dir.exists() and scripts_dir.is_dir():
-            script_files = list(scripts_dir.glob("*.py"))
-            if script_files:
-                print(f"\n📦 Skill '{skill.name}' - scripts/")
-                for script in script_files[:3]:  # Show first 3
-                    print(f"  📄 {script}")
+    if not skill_with_resource_mentions:
+        print("\nNo skills found that mention resources in their instructions")
+        return
 
-        # Check for references/
-        references_dir = skill_dir / "references"
-        if references_dir.exists() and references_dir.is_dir():
-            ref_files = list(references_dir.glob("*"))
-            if ref_files:
-                print(f"\n📦 Skill '{skill.name}' - references/")
-                for ref in ref_files[:3]:  # Show first 3
-                    if ref.is_file():
-                        print(f"  📄 {ref}")
-
-    print("\n✓ LLM will read these files using file_read tool only when needed")
+    skill_name = skill_with_resource_mentions.name
+    skill_dir = Path(skill_with_resource_mentions.skill_dir)
+    
+    print(f"\n📦 Testing with skill: '{skill_name}'")
+    print("Testing: Agent reads resources based on SKILL.md instructions")
+    print("=" * 60)
+    
+    # Read SKILL.md to understand what resources are mentioned and how they should be used
+    skill_path = Path(skill_with_resource_mentions.path)
+    
+    prompt = f"{skill_name} skill을 사용해서 작업을 수행해주세요. SKILL.md의 instructions에 따라 필요한 리소스 파일들을 참고해주세요."
+    
+    print(f"\nAsking agent: '{prompt}'\n")
+    
+    # Create streaming logger for this query
+    logger = StreamingLogger()
+    
+    # Use streaming to track tool calls and output chunk text
+    async for event in agent.stream_async(prompt):
+        logger.process_event(event)
+        
+    print("\n✓ Agent should have read resource files based on SKILL.md instructions (true progressive disclosure)")
 
 
 async def example_interactive_chat(agent):
@@ -138,6 +155,8 @@ async def example_interactive_chat(agent):
     print("=" * 60)
     print("\nCommands: 'quit', 'exit', 'q' to stop")
     print("Try: 'Activate the web-research skill'\n")
+
+    logger = StreamingLogger()
 
     while True:
         try:
@@ -150,9 +169,14 @@ async def example_interactive_chat(agent):
             if not user_input:
                 continue
 
-            response = await agent.invoke_async(user_input)
+            # Reset logger for new query
+            logger.reset()
+            
             print("\nAgent: ", end="")
-            print_response(response)
+            # Use streaming to track tool calls and output chunk text
+            async for event in agent.stream_async(user_input):
+                logger.process_event(event)
+            print()  # New line after response
 
         except KeyboardInterrupt:
             print("\n\nGoodbye!")
@@ -172,11 +196,22 @@ async def main():
         print("\n⚠️  No skills found. Please create skills in the 'skills/' directory.")
         return
 
+    # Create agent with file_read tool (LLM will read SKILL.md when needed)
+    base_prompt = "You are a helpful AI assistant with access to specialized skills."
+    skills_prompt = generate_skills_prompt(skills)
+    full_prompt = f"{base_prompt}\n\n{skills_prompt}"
+
+    agent = Agent(
+        system_prompt=full_prompt,
+        tools=[file_read, file_write, shell],  # LLM uses this to read SKILL.md
+        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    )
+
     # Phase 2: Activation
-    agent = await example_phase2_activation(skills, skills_dir)
+    await example_phase2_activation(skills, agent)
 
     # Phase 3: Resources
-    await example_phase3_resources(skills)
+    await example_phase3_resources(skills, agent)
 
     # Interactive chat (optional)
     print("\n" + "=" * 60)

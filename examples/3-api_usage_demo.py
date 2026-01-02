@@ -115,7 +115,7 @@ def demo_phase2_load_instructions(skills):
 
     print(f"\n📝 First 200 characters:")
     print("─" * 70)
-    print(instructions[:200] + "...")
+    print(instructions)
     print("─" * 70)
 
     return skill
