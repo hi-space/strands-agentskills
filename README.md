@@ -82,27 +82,31 @@ agentskills/
 ```python
 # 모든 Skill의 metadata만 로드
 skills = discover_skills("./skills")  # ~100 tokens/skill
+
+# Skill 사용을 위한 프롬프트 injection
+system_prompt = "You are a helpful AI assistant."
+skills_prompt = generate_skills_prompt(skills)
+full_prompt = f"{system_prompt}\n\n{skills_prompt}"
 ```
 
-### Phase 2: Activation (필요 시)
+### Phase 2, 3: Activation (필요 시), Resources (참조 시)
 
 ```python
+agent = Agent(
+    system_prompt=full_prompt,
+    tools=[skill_tool, file_read],
+    model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+)
+
 # Filesystem-based: LLM이 file_read로 자동 읽기
-response = await agent.invoke_async("web-research 스킬 사용해줘")
+response = await agent.stream_async("web-research 스킬 사용해줘")
 # → LLM이 file_read로 SKILL.md 읽음
+# → LLM이 file_read로 resources 읽음
 
 # Tool-based: skill 도구 사용
-instructions = skill(skill_name="web-research")
-
-# 또는 프로그래밍 방식으로 직접 읽기
-instructions = load_instructions(skill.path)  # <5000 tokens/skill
-```
-
-### Phase 3: Resources (참조 시)
-
-```python
-# 특정 파일만 필요할 때 로드
-api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
+skill_tool = create_skill_tool(skills, "./skills")
+# → LLM이 skill(skill_name="web-research") 호출
+# → LLM이 file_read로 resources 읽음
 ```
 
 ## 토큰 효율성
@@ -123,7 +127,6 @@ Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
 
 ## 보안
 
-내장 보안 기능:
 - **경로 검증**: 디렉토리 탐색 공격 방지
 - **파일 크기 제한**: 대용량 파일 로딩 방지 (최대 10MB)
 - **엄격한 검증**: Agent Skills 표준 강제
@@ -150,23 +153,22 @@ agentskills/
 ```mermaid
 flowchart TD
     Start([skills_dir<br/>├── skill-a<br/>└── skill-b]) --> Discover[discover_skills<br/>load_metadata]
-    Discover --> Props["SkillProperties<br/>name, description, path, skill_dir<br/>~100 tokens/skill"]
+    Discover --> Props["SkillProperties<br/> - name, description, path, skill_dir"]
     
     Props --> Prompt[generate_skills_prompt]
-    Prompt --> SysPrompt["System Prompt<br/>Skill metadata만 포함<br/>~100 tokens/skill"]
+    Prompt --> SysPrompt["System Prompt<br/> - Skill metadata만 포함"]
     
     SysPrompt --> Agent["Agent 생성<br/>tools: skill_tool, file_read"]
     
-    UserReq["사용자 요청<br/>web-research 스킬 사용해줘"] --> Agent
+    UserReq["사용자 요청"] --> Agent
     
     Agent -->|"Phase 2: Activation<br/>&lt;5000 tokens"| SkillTool[skill_tool 호출]
     SkillTool --> LoadInst[load_instructions]
-    LoadInst --> InstBody["SKILL.md body 반환"]
+    LoadInst --> InstBody["SKILL.md 의 body 반환"]
     InstBody -->|Agent context에 추가| Agent
     
     Agent -->|"Phase 3: Resources<br/>as needed"| FileRead[file_read 호출]
-    FileRead --> LoadRes[load_resource]
-    LoadRes --> Resources["scripts/helper.py<br/>references/api.md"]
+    FileRead --> Resources["scripts/helper.py<br/>references/api.md"]
     Resources -->|Agent context에 추가| Agent
     
     Agent --> Response[Agent가 최종 응답 생성]
