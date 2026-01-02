@@ -3,3 +3,7 @@ strands-agents-tools>=0.2.0
 
 # YAML parsing
 pyyaml>=6.0
+
+# Streamlit demo (optional)
+streamlit>=1.28.0
+plotly>=5.17.0
