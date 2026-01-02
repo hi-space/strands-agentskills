@@ -56,6 +56,10 @@ async def main():
     skills_prompt = generate_skills_prompt(skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
 
+    print("\n" + "=" * 60)
+    print(full_prompt)
+    print("\n" + "=" * 60)
+
     # 3. Create agent with file_read tool
     # LLM will use file_read to load SKILL.md when needed (progressive disclosure)
     agent = Agent(
@@ -83,7 +87,6 @@ async def main():
             f"How do I use the {first_skill.name} skill?"
         )
         print_response(response)
-        print("\n✓ LLM read the SKILL.md only when asked (progressive disclosure)")
     
 
 if __name__ == "__main__":

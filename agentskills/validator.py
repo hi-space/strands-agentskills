@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from .errors import ParseError
-from .parser import find_skill_md, parse_frontmatter
+from .parser import find_skill_md, _extract_yaml_frontmatter
 
 # Validation constants from AgentSkills.io spec
 MAX_SKILL_NAME_LENGTH = 64
@@ -174,7 +174,7 @@ def validate(skill_dir: Path) -> list[str]:
 
     try:
         content = skill_md.read_text()
-        metadata, _ = parse_frontmatter(content)
+        metadata, _ = _extract_yaml_frontmatter(content)
     except ParseError as e:
         return [str(e)]
 

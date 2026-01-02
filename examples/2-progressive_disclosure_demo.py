@@ -12,9 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agentskills import (
     discover_skills,
-    read_metadata,
-    read_instructions,
-    read_resource,
+    load_metadata,
+    load_instructions,
+    load_resource,
 )
 
 
@@ -37,7 +37,7 @@ def demo_phase1_discovery():
     """Phase 1: Discovery - Load only metadata (~100 tokens/skill)"""
     print_section("Phase 1: Discovery (Metadata Only)", "PHASE 1")
 
-    skills_dir = Path(__file__).parent.parent.parent / "skills"
+    skills_dir = Path(__file__).parent.parent / "skills"
 
     print(f"\n📂 Scanning: {skills_dir}")
     print("⏳ Loading metadata only (not instructions or resources)...\n")
@@ -92,8 +92,8 @@ def demo_phase2_activation(skills):
     print(f"📄 Loading instructions from: {skill.path}")
     print("⏳ Reading SKILL.md body (without re-parsing frontmatter)...\n")
 
-    # Phase 2: read_instructions() loads ONLY the body
-    instructions = read_instructions(skill.path)
+    # Phase 2: load_instructions() loads ONLY the body
+    instructions = load_instructions(skill.path)
 
     tokens = estimate_tokens(instructions)
     lines = len(instructions.split('\n'))
@@ -102,9 +102,9 @@ def demo_phase2_activation(skills):
     print(f"   📊 Size: {len(instructions)} characters")
     print(f"   📊 Estimated tokens: ~{tokens} tokens")
     print(f"   📊 Lines: {lines}")
-    print(f"\n📝 Preview (first 300 chars):")
+    print(f"\n📝 Instructions:")
     print("-" * 70)
-    print(instructions[:300] + "...")
+    print(instructions)
     print("-" * 70)
 
     # Show token efficiency
@@ -142,12 +142,14 @@ def demo_phase3_resources(skill):
             print(f"      ⏳ Loading on-demand...")
 
             try:
-                content = read_resource(skill.skill_dir, rel_path)
+                content = load_resource(skill.skill_dir, rel_path)
                 tokens = estimate_tokens(content)
                 total_resource_tokens += tokens
 
                 print(f"      ✅ Loaded: {len(content)} chars, ~{tokens} tokens")
-                print(f"      Preview: {content[:100].strip()}...")
+                print("-" * 70)
+                print(f"{content}")
+                print("-" * 70)
                 resources_loaded.append((rel_path, tokens))
             except Exception as e:
                 print(f"      ❌ Error: {e}")
@@ -164,12 +166,14 @@ def demo_phase3_resources(skill):
             print(f"      ⏳ Loading on-demand...")
 
             try:
-                content = read_resource(skill.skill_dir, rel_path)
+                content = load_resource(skill.skill_dir, rel_path)
                 tokens = estimate_tokens(content)
                 total_resource_tokens += tokens
 
                 print(f"      ✅ Loaded: {len(content)} chars, ~{tokens} tokens")
-                print(f"      Preview: {content[:100].strip()}...")
+                print("-" * 70)
+                print(f"{content}")
+                print("-" * 70)
                 resources_loaded.append((rel_path, tokens))
             except Exception as e:
                 print(f"      ❌ Error: {e}")
@@ -186,7 +190,7 @@ def demo_phase3_resources(skill):
             print(f"      ⏳ Loading on-demand...")
 
             try:
-                content = read_resource(skill.skill_dir, rel_path)
+                content = load_resource(skill.skill_dir, rel_path)
                 tokens = estimate_tokens(content)
                 total_resource_tokens += tokens
 
@@ -233,30 +237,6 @@ def demo_complete_flow():
     # Phase 3
     demo_phase3_resources(skill)
 
-    # Summary
-    print_section("Summary: Token Usage Pattern")
-
-    print("\n📊 Token Usage by Phase:\n")
-    print("   Phase 1 (Discovery):")
-    print("   └─ All skills metadata: ~100 tokens/skill")
-    print("   └─ Loaded at: Agent startup")
-    print("   └─ Purpose: Skill discovery and selection\n")
-
-    print("   Phase 2 (Activation):")
-    print("   └─ Single skill instructions: <5000 tokens")
-    print("   └─ Loaded at: Skill activation")
-    print("   └─ Purpose: Workflow guidance\n")
-
-    print("   Phase 3 (Resources):")
-    print("   └─ Individual files: varies")
-    print("   └─ Loaded at: When referenced")
-    print("   └─ Purpose: Detailed documentation, scripts\n")
-
-    print("✨ This pattern ensures efficient context usage!")
-    print("   - Start with minimal context (Phase 1)")
-    print("   - Expand only when needed (Phase 2, 3)")
-    print("   - Keep token usage under control")
-
 
 def main():
     """Run Progressive Disclosure demonstration"""
@@ -265,10 +245,6 @@ def main():
     print("🚀 " * 20)
 
     demo_complete_flow()
-
-    print("\n" + "✅ " * 20)
-    print(" " * 20 + "Demo Complete!")
-    print("✅ " * 20 + "\n")
 
 
 if __name__ == "__main__":

@@ -11,9 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agentskills import (
     discover_skills,
-    read_metadata,
-    read_instructions,
-    read_resource,
+    load_metadata,
+    load_instructions,
+    load_resource,
     generate_skills_prompt,
     create_skill_tool,
 )
@@ -59,14 +59,14 @@ def demo_phase1_discover_all():
 
 
 def demo_phase1_read_single():
-    """Phase 1: read_metadata() - Load single skill metadata"""
-    print_header("Phase 1: read_metadata()", "PHASE 1")
+    """Phase 1: load_metadata() - Load single skill metadata"""
+    print_header("Phase 1: load_metadata()", "PHASE 1")
 
-    print("\n💡 Function: read_metadata(skill_dir)")
+    print("\n💡 Function: load_metadata(skill_dir)")
     print("   Returns: SkillProperties")
     print("   Purpose: Load metadata for a SINGLE skill\n")
 
-    skills_dir = Path(__file__).parent.parent.parent / "skills"
+    skills_dir = Path(__file__).parent.parent / "skills"
 
     # Find first directory with SKILL.md
     first_skill_dir = None
@@ -79,8 +79,8 @@ def demo_phase1_read_single():
         print("⚠️  No skills found")
         return None
 
-    print(f">>> skill = read_metadata(Path('{first_skill_dir}'))")
-    skill = read_metadata(first_skill_dir)
+    print(f">>> skill = load_metadata(Path('{first_skill_dir}'))")
+    skill = load_metadata(first_skill_dir)
 
     print(f"\n✅ Result: Loaded '{skill.name}'\n")
     print(f"   name: {skill.name}")
@@ -91,9 +91,9 @@ def demo_phase1_read_single():
     return skill
 
 
-def demo_phase2_read_instructions(skills):
-    """Phase 2: read_instructions() - Load instructions body"""
-    print_header("Phase 2: read_instructions()", "PHASE 2")
+def demo_phase2_load_instructions(skills):
+    """Phase 2: load_instructions() - Load instructions body"""
+    print_header("Phase 2: load_instructions()", "PHASE 2")
 
     if not skills:
         print("⚠️  No skills available")
@@ -101,12 +101,12 @@ def demo_phase2_read_instructions(skills):
 
     skill = skills[0]
 
-    print("\n💡 Function: read_instructions(skill_path)")
+    print("\n💡 Function: load_instructions(skill_path)")
     print("   Returns: str (markdown body without frontmatter)")
     print("   Purpose: Load instructions when skill is ACTIVATED\n")
 
-    print(f">>> instructions = read_instructions('{skill.path}')")
-    instructions = read_instructions(skill.path)
+    print(f">>> instructions = load_instructions('{skill.path}')")
+    instructions = load_instructions(skill.path)
 
     print(f"\n✅ Result: Loaded instructions\n")
     print(f"   Length: {len(instructions)} characters")
@@ -121,15 +121,15 @@ def demo_phase2_read_instructions(skills):
     return skill
 
 
-def demo_phase3_read_resource(skill):
-    """Phase 3: read_resource() - Load resource files"""
-    print_header("Phase 3: read_resource()", "PHASE 3")
+def demo_phase3_load_resource(skill):
+    """Phase 3: load_resource() - Load resource files"""
+    print_header("Phase 3: load_resource()", "PHASE 3")
 
     if not skill:
         print("⚠️  No skill available")
         return
 
-    print("\n💡 Function: read_resource(skill_dir, resource_path)")
+    print("\n💡 Function: load_resource(skill_dir, resource_path)")
     print("   Returns: str (file content)")
     print("   Purpose: Load resource files ON-DEMAND\n")
 
@@ -151,10 +151,10 @@ def demo_phase3_read_resource(skill):
         file = files[0]
         rel_path = f"{subdir}/{file.relative_to(resource_dir)}"
 
-        print(f">>> content = read_resource('{skill.skill_dir}', '{rel_path}')")
+        print(f">>> content = load_resource('{skill.skill_dir}', '{rel_path}')")
 
         try:
-            content = read_resource(skill.skill_dir, rel_path)
+            content = load_resource(skill.skill_dir, rel_path)
             loaded = True
 
             print(f"\n✅ Result: Loaded resource\n")
@@ -205,19 +205,14 @@ def demo_helper_create_tool(skills):
     print("   Returns: Callable (Strands @tool function)")
     print("   Purpose: Create tool for skill activation\n")
 
-    skills_dir = Path(__file__).parent.parent.parent.parent / "skills"
+    skills_dir = Path(__file__).parent.parent / "skills"
 
     print(f">>> skill_tool = create_skill_tool(skills, '{skills_dir}')")
     skill_tool = create_skill_tool(skills, skills_dir)
 
     print(f"\n✅ Result: Tool created\n")
     print(f"   Function name: {skill_tool.__name__}")
-    print(f"   Docstring: {skill_tool.__doc__[:100]}...")
-
-    print("\n   Tool provides 3 actions:")
-    print("   1. skill(skill_name='xxx', action='list') - List skills")
-    print("   2. skill(skill_name='xxx', action='info') - Show metadata")
-    print("   3. skill(skill_name='xxx', action='activate') - Load instructions")
+    print(f"   Docstring: {skill_tool.__doc__}")
 
 
 def demo_token_comparison(skills):
@@ -239,7 +234,7 @@ def demo_token_comparison(skills):
 
     # Phase 2
     skill = skills[0]
-    instructions = read_instructions(skill.path)
+    instructions = load_instructions(skill.path)
     phase2_tokens = len(instructions) // 4
 
     print(f"   Phase 2 (1 skill instructions): ~{phase2_tokens} tokens")
@@ -254,7 +249,7 @@ def demo_token_comparison(skills):
             for file in files[:2]:  # First 2 files
                 try:
                     rel_path = f"{subdir}/{file.relative_to(resource_dir)}"
-                    content = read_resource(skill.skill_dir, rel_path)
+                    content = load_resource(skill.skill_dir, rel_path)
                     phase3_tokens += len(content) // 4
                 except:
                     pass
@@ -268,7 +263,7 @@ def demo_token_comparison(skills):
     all_tokens = 0
     for skill in skills:
         try:
-            instructions = read_instructions(skill.path)
+            instructions = load_instructions(skill.path)
             all_tokens += len(instructions) // 4
         except:
             pass
@@ -293,18 +288,18 @@ def main():
         print("\n⚠️  No skills found. Create skills in 'skills/' directory.")
         return
 
-    input("\n⏸  Press Enter to see read_metadata() example...")
+    input("\n⏸  Press Enter to see load_metadata() example...")
     demo_phase1_read_single()
 
     # Phase 2: Activation
     input("\n⏸  Press Enter to continue to Phase 2...")
     print("\n" + "⚡ PHASE 2: ACTIVATION (Load Instructions)")
-    skill = demo_phase2_read_instructions(skills)
+    skill = demo_phase2_load_instructions(skills)
 
     # Phase 3: Resources
     input("\n⏸  Press Enter to continue to Phase 3...")
     print("\n" + "📦 PHASE 3: RESOURCES (Load Files On-Demand)")
-    demo_phase3_read_resource(skill)
+    demo_phase3_load_resource(skill)
 
     # Helpers
     input("\n⏸  Press Enter to see helper functions...")
@@ -317,43 +312,6 @@ def main():
     # Token comparison
     input("\n⏸  Press Enter to see token usage comparison...")
     demo_token_comparison(skills)
-
-    # Summary
-    print_header("Summary")
-
-    print("""
-Progressive Disclosure API - 3 Phases:
-
-Phase 1 - Discovery (Metadata):
-  discover_skills(skills_dir) → List[SkillProperties]
-  read_metadata(skill_dir) → SkillProperties
-
-  ✓ Loads: name, description, path, allowed_tools
-  ✓ When: Agent startup
-  ✓ Cost: ~100 tokens per skill
-
-Phase 2 - Activation (Instructions):
-  read_instructions(skill_path) → str
-
-  ✓ Loads: SKILL.md body (markdown)
-  ✓ When: Skill is activated
-  ✓ Cost: <5000 tokens per skill
-
-Phase 3 - Resources (Files):
-  read_resource(skill_dir, resource_path) → str
-
-  ✓ Loads: Individual files (scripts, references, assets)
-  ✓ When: File is referenced
-  ✓ Cost: Varies by file size
-
-Helper Functions:
-  generate_skills_prompt(skills) → str
-  create_skill_tool(skills, skills_dir) → Callable
-
-Each phase loads progressively more content ONLY when needed!
-""")
-
-    print("✅ " * 20 + "\n")
 
 
 if __name__ == "__main__":

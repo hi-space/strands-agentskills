@@ -1,33 +1,67 @@
 """Generate skills prompt for agent system prompts
 
-This module provides Markdown-formatted prompt generation.
+This module provides XML-formatted prompt generation following the AgentSkills.io specification.
 """
 
 from typing import List
 from .models import SkillProperties
 
+
 SKILLS_SYSTEM_PROMPT = """
-## Available Skills
+## Skills System
+
+You have access to a skills library that provides specialized capabilities and domain knowledge.
 
 {skills_list}
 
-**How to Use:**
-1. When a task matches a skill's description, use the `skill` tool to load instructions
-2. Follow the skill's instructions precisely
-3. Use `file_read` to access resources in the skill directory when needed
+**How to Use Skills:**
+
+Skills follow a **progressive disclosure** pattern - you know they exist (name + description above), but you only read the full instructions when needed:
+1. **Recognize when a skill applies**: Check if the user's task matches any skill's description
+2. **Read the skill's full instructions**: Use the absolute path shown above to read SKILL.md
+3. **Follow the skill's instructions**: SKILL.md contains step-by-step workflows, best practices, and examples
+4. **Access supporting files**: Skills may include Python scripts, configs, or reference docs - always use absolute paths
+
+**When to Use Skills:**
+- When the user's request matches a skill's domain (e.g., "research X" → web-research skill)
+- When you need specialized knowledge or structured workflows
+- When a skill provides proven patterns for complex tasks
+
+**Skills are Self-Documenting:**
+- Each SKILL.md tells you exactly what the skill does and how to use it
+- Read only the skills you need - this keeps your context focused and efficient
+
+**Executing Skill Scripts:**
+Skills may contain Python scripts or other executable files. Always use absolute paths from the skill list.
+
+Remember: Skills are tools to make you more capable and consistent. When in doubt, check if a skill exists for the task!
 """
+
+# SKILLS_SYSTEM_PROMPT = """
+# You have access to a skills library that provides specialized capabilities and domain knowledge.
+
+# ## Available Skills
+
+# {skills_list}
+
+# ## How to Use
+# 1. When a task matches a skill's description, use the `skill` tool to load instructions
+# 2. Follow the skill's instructions precisely
+# 3. Use `file_read` to access resources in the skill directory when needed
+# """
 
 
 def generate_skills_prompt(skills: List[SkillProperties]) -> str:
-    """Generate Markdown system prompt section from SkillProperties list
+    """Generate XML system prompt section from SkillProperties list
 
-    This generates a concise prompt with skill metadata only (Phase 1 of Progressive Disclosure).
+    This generates a concise prompt with skill metadata only (Phase 1 of Progressive Disclosure),
+    following the AgentSkills.io specification format using XML.
 
     Args:
         skills: List of discovered skill properties
 
     Returns:
-        Markdown formatted prompt text
+        XML formatted prompt text with <available_skills> section
 
     Example:
         >>> from agentskills import discover_skills, generate_skills_prompt
@@ -38,22 +72,26 @@ def generate_skills_prompt(skills: List[SkillProperties]) -> str:
     if not skills:
         return ""
 
-    # Build skills list (metadata only)
-    skills_list_lines = []
+    # Build XML skills list (metadata only)
+    skill_elements = []
     for skill in sorted(skills, key=lambda s: s.name):
-        skills_list_lines.append(f"- **{skill.name}**: {skill.description}")
-        skills_list_lines.append(f"  Path: `{skill.path}`")
-        skills_list_lines.append(f"  Directory: `{skill.skill_dir}/`")
+        skill_xml = (
+            "  <skill>\n"
+            f"    <name>{skill.name}</name>\n"
+            f"    <description>{skill.description}</description>\n"
+            f"    <location>{skill.path}</location>\n"
+            "  </skill>"
+        )
+        skill_elements.append(skill_xml)
 
-        if skill.allowed_tools:
-            skills_list_lines.append(f"  Allowed Tools: {skill.allowed_tools}")
-        if skill.compatibility:
-            skills_list_lines.append(f"  Requirements: {skill.compatibility}")
-
-    skills_list = "\n".join(skills_list_lines)
+    skills_xml = (
+        "<available_skills>\n"
+        + "\n".join(skill_elements)
+        + "\n</available_skills>"
+    )
 
     # Format the template
-    return SKILLS_SYSTEM_PROMPT.format(skills_list=skills_list)
+    return SKILLS_SYSTEM_PROMPT.format(skills_list=skills_xml)
 
 
 __all__ = ["generate_skills_prompt"]

@@ -62,9 +62,9 @@ python examples/api_usage_demo.py
 
 **시연 내용:**
 - 정확한 함수 시그니처와 사용법
-- `discover_skills()`, `read_metadata()` (Phase 1)
-- `read_instructions()` (Phase 2)
-- `read_resource()` (Phase 3)
+- `discover_skills()`, `load_metadata()` (Phase 1)
+- `load_instructions()` (Phase 2)
+- `load_resource()` (Phase 3)
 - Helper 함수: `generate_skills_prompt()`, `create_skill_tool()`
 
 **추천 대상:** API 레퍼런스 및 구현 세부사항
@@ -105,23 +105,23 @@ for skill in skills:
 
 ### Phase 2: Activation (필요 시)
 ```python
-from agentskills import read_instructions
+from agentskills import load_instructions
 
 # Tool을 통해 자동
 response = await agent.invoke_async("web-research 스킬 사용해줘")
 
 # 수동
-instructions = read_instructions(skill.path)
+instructions = load_instructions(skill.path)
 # 토큰 비용: <5000 tokens per skill
 ```
 
 ### Phase 3: Resources (참조 시)
 ```python
-from agentskills import read_resource
+from agentskills import load_resource
 
 # instructions에서 참조된 특정 파일 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
-helper = read_resource(skill.skill_dir, "scripts/helper.py")
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
+helper = load_resource(skill.skill_dir, "scripts/helper.py")
 ```
 
 ## 예제 실행
@@ -235,7 +235,7 @@ agent = Agent(
 ```python
 # Agent가 실행 중에 resource 요청 가능
 if "API 문서 로드" in user_request:
-    api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
+    api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
     # 컨텍스트에서 api_docs 사용
 ```
 

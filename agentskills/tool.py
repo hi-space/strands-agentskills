@@ -73,9 +73,9 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
 
         try:
             # Phase 2: Load instructions only (not frontmatter)
-            from .parser import read_instructions
+            from .parser import load_instructions
 
-            instructions = read_instructions(skill_props.path)
+            instructions = load_instructions(skill_props.path)
             logger.info(f"Loaded skill: {skill_name}")
 
             # Build response with header and instructions

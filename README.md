@@ -58,7 +58,7 @@ AgentSkills.io의 3단계 로딩 패턴을 구현합니다:
 ```
 agentskills/
 ├── models.py       # SkillProperties (Phase 1 metadata)
-├── parser.py       # read_metadata, read_instructions, read_resource
+├── parser.py       # load_metadata, load_instructions, load_resource
 ├── validator.py    # AgentSkills.io 표준 검증
 ├── discovery.py    # 스킬 디렉토리 스캔 (Phase 1)
 ├── tool.py         # 활성화 로직 (Phase 2)
@@ -97,14 +97,14 @@ response = await agent.invoke_async("web-research 스킬 사용해줘")
 instructions = skill(skill_name="web-research")
 
 # 또는 프로그래밍 방식으로 직접 읽기
-instructions = read_instructions(skill.path)  # <5000 tokens/skill
+instructions = load_instructions(skill.path)  # <5000 tokens/skill
 ```
 
 ### Phase 3: Resources (참조 시)
 
 ```python
 # 특정 파일만 필요할 때 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
 ```
 
 ## 토큰 효율성
@@ -139,7 +139,7 @@ Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
 agentskills/
 ├── __init__.py      # Public API (16개 exports)
 ├── models.py        # SkillProperties (Phase 1 metadata)
-├── parser.py        # read_metadata, read_instructions, read_resource
+├── parser.py        # load_metadata, load_instructions, load_resource
 ├── validator.py     # 표준 검증
 ├── discovery.py     # 스킬 스캔 (Phase 1)
 ├── tool.py          # 활성화 (Phase 2)
@@ -156,7 +156,7 @@ Phase 1: Discovery (~100 tokens/skill)
 │  ├── skill-a│
 │  └── skill-b│
 └──────┬──────┘
-       │ read_metadata()
+       │ load_metadata()
        ▼
 ┌──────────────────┐
 │ SkillProperties[]│  name, description, path, skill_dir
@@ -170,14 +170,14 @@ Phase 1: Discovery (~100 tokens/skill)
                      │            │
                      │ Phase 2: Activation (<5000 tokens)
                      ▼            │
-              read_instructions() │
+              load_instructions() │
                      │            │
                      └────────────┘
                      │
                      │ Phase 3: Resources (as needed)
                      ▼
-              read_resource("scripts/helper.py")
-              read_resource("references/api.md")
+              load_resource("scripts/helper.py")
+              load_resource("references/api.md")
 ```
 
 ## 설치
@@ -258,13 +258,13 @@ API는 3단계 패턴을 따릅니다:
 #### Phase 1: Discovery (metadata만)
 
 ```python
-from agentskills import discover_skills, read_metadata
+from agentskills import discover_skills, load_metadata
 
 # 모든 Skill discovery - metadata만 로드 (~100 tokens/skill)
 skills = discover_skills("./skills")
 
 # 또는 단일 스킬 metadata 읽기
-skill = read_metadata(Path("./skills/web-research"))
+skill = load_metadata(Path("./skills/web-research"))
 
 for skill in skills:
     print(f"{skill.name}: {skill.description}")
@@ -274,21 +274,21 @@ for skill in skills:
 #### Phase 2: Activation (Instructions 로드)
 
 ```python
-from agentskills import read_instructions
+from agentskills import load_instructions
 
 # Skill activation 시 instructions 로드
-instructions = read_instructions(skill.path)
+instructions = load_instructions(skill.path)
 print(instructions)  # frontmatter 제외한 Markdown body
 ```
 
 #### Phase 3: Resources (필요시 로드)
 
 ```python
-from agentskills import read_resource
+from agentskills import load_resource
 
 # 필요한 resource 파일 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
-helper_script = read_resource(skill.skill_dir, "scripts/helper.py")
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
+helper_script = load_resource(skill.skill_dir, "scripts/helper.py")
 ```
 
 ### create_skill_tool(skills, skills_dir)
