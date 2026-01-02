@@ -137,54 +137,67 @@ Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
 
 ```
 agentskills/
-├── __init__.py      # Public API (16개 exports)
+├── __init__.py      # Public API (18개 exports)
 ├── models.py        # SkillProperties (Phase 1 metadata)
-├── parser.py        # load_metadata, load_instructions, load_resource
-├── validator.py     # 표준 검증
-├── discovery.py     # 스킬 스캔 (Phase 1)
-├── tool.py          # 활성화 (Phase 2)
-├── prompt.py        # 시스템 프롬프트 생성
-└── errors.py        # 예외 계층 구조
+├── parser.py        # load_metadata, load_instructions, load_resource, find_skill_md
+├── validator.py     # validate, validate_metadata (표준 검증)
+├── discovery.py     # discover_skills (스킬 스캔, Phase 1)
+├── tool.py          # create_skill_tool (활성화, Phase 2)
+├── prompt.py        # generate_skills_prompt (시스템 프롬프트 생성)
+└── errors.py        # 예외 계층 구조 (5개 예외 클래스)
 ```
 
 ### Progressive Disclosure 데이터 흐름
 
-```
-Phase 1: Discovery (~100 tokens/skill)
-┌─────────────┐
-│ skills_dir  │
-│  ├── skill-a│
-│  └── skill-b│
-└──────┬──────┘
-       │ load_metadata()
-       ▼
-┌──────────────────┐
-│ SkillProperties[]│  name, description, path, skill_dir
-└──────┬───────────┘
-       │
-       ├──────────────┬────────────┐
-       ▼              ▼            ▼
-   ┌────────┐   ┌────────┐   ┌────────┐
-   │prompt  │   │tool    │   │Agent   │
-   └────────┘   └────┬───┘   └───┬────┘
-                     │            │
-                     │ Phase 2: Activation (<5000 tokens)
-                     ▼            │
-              load_instructions() │
-                     │            │
-                     └────────────┘
-                     │
-                     │ Phase 3: Resources (as needed)
-                     ▼
-              load_resource("scripts/helper.py")
-              load_resource("references/api.md")
+```mermaid
+flowchart TD
+    Start([skills_dir<br/>├── skill-a<br/>└── skill-b]) --> Discover[discover_skills<br/>load_metadata]
+    Discover --> Props["SkillProperties<br/>name, description, path, skill_dir<br/>~100 tokens/skill"]
+    
+    Props --> Prompt[generate_skills_prompt]
+    Prompt --> SysPrompt["System Prompt<br/>Skill metadata만 포함<br/>~100 tokens/skill"]
+    
+    SysPrompt --> Agent["Agent 생성<br/>tools: skill_tool, file_read"]
+    
+    UserReq["사용자 요청<br/>web-research 스킬 사용해줘"] --> Agent
+    
+    Agent -->|"Phase 2: Activation<br/>&lt;5000 tokens"| SkillTool[skill_tool 호출]
+    SkillTool --> LoadInst[load_instructions]
+    LoadInst --> InstBody["SKILL.md body 반환"]
+    InstBody -->|Agent context에 추가| Agent
+    
+    Agent -->|"Phase 3: Resources<br/>as needed"| FileRead[file_read 호출]
+    FileRead --> LoadRes[load_resource]
+    LoadRes --> Resources["scripts/helper.py<br/>references/api.md"]
+    Resources -->|Agent context에 추가| Agent
+    
+    Agent --> Response[Agent가 최종 응답 생성]
+    
+    style Start fill:#e1f5ff
+    style Props fill:#fff4e1
+    style SysPrompt fill:#fff4e1
+    style Agent fill:#e8f5e9
+    style SkillTool fill:#f3e5f5
+    style FileRead fill:#f3e5f5
+    style Response fill:#e8f5e9
 ```
 
 ## 설치
 
+### 시스템 요구사항
+
+- Python 3.10 이상
+- Strands Agents SDK 1.0.0 이상
+- Strands Agents Tools 0.2.0 이상
+
+### 설치 방법
+
 ```bash
-pip install strands strictyaml
-pip install -e ./agentskills
+# 또는 requirements.txt 사용
+pip install -r requirements.txt
+
+# 패키지 설치 (개발 모드)
+pip install -e .
 ```
 
 ## 빠른 시작
@@ -251,6 +264,35 @@ response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
 
 ## 핵심 API
 
+### 전체 Public API 목록
+
+이 패키지는 다음 18개의 함수/클래스를 export합니다:
+
+**Models:**
+- `SkillProperties` - Skill 메타데이터 데이터 클래스
+
+**Progressive Disclosure API (Phase 1-3):**
+- `discover_skills()` - Phase 1: 모든 스킬의 metadata 발견
+- `load_metadata()` - Phase 1: 단일 스킬의 metadata 로드
+- `find_skill_md()` - SKILL.md 파일 찾기
+- `load_instructions()` - Phase 2: 스킬 instructions 로드
+- `load_resource()` - Phase 3: 리소스 파일 로드
+
+**Validator:**
+- `validate()` - 스킬 디렉토리 전체 검증
+- `validate_metadata()` - 메타데이터만 검증
+
+**Prompt & Tool:**
+- `generate_skills_prompt()` - 시스템 프롬프트 생성
+- `create_skill_tool()` - Skill 활성화 도구 생성
+
+**Errors:**
+- `SkillError` - 기본 예외 클래스
+- `ParseError` - 파싱 오류
+- `ValidationError` - 검증 오류
+- `SkillNotFoundError` - 스킬을 찾을 수 없음
+- `SkillActivationError` - 스킬 활성화 실패
+
 ### Progressive Disclosure 함수들
 
 API는 3단계 패턴을 따릅니다:
@@ -258,13 +300,17 @@ API는 3단계 패턴을 따릅니다:
 #### Phase 1: Discovery (metadata만)
 
 ```python
-from agentskills import discover_skills, load_metadata
+from agentskills import discover_skills, load_metadata, find_skill_md
+from pathlib import Path
 
 # 모든 Skill discovery - metadata만 로드 (~100 tokens/skill)
 skills = discover_skills("./skills")
 
 # 또는 단일 스킬 metadata 읽기
 skill = load_metadata(Path("./skills/web-research"))
+
+# SKILL.md 파일 찾기
+skill_md_path = find_skill_md(Path("./skills/web-research"))
 
 for skill in skills:
     print(f"{skill.name}: {skill.description}")
@@ -328,19 +374,27 @@ prompt = generate_skills_prompt(skills)
 print(prompt)
 ```
 
-### validate(skill_dir)
+### validate(skill_dir) / validate_metadata(metadata, skill_dir)
 
-Agent Skills 표준에 따라 스킬 디렉토리 검증.
+Agent Skills 표준에 따라 스킬 디렉토리 또는 메타데이터 검증.
 
 ```python
-from agentskills import validate
+from agentskills import validate, validate_metadata
+from pathlib import Path
 
-errors = validate("./skills/web-research")
+# 스킬 디렉토리 전체 검증
+errors = validate(Path("./skills/web-research"))
 if not errors:
     print("✅ 유효한 스킬입니다")
 else:
     for error in errors:
         print(f"❌ {error}")
+
+# 메타데이터만 검증 (이미 파싱된 경우)
+from agentskills import load_metadata
+skill = load_metadata(Path("./skills/web-research"))
+metadata = skill.to_dict()
+errors = validate_metadata(metadata, Path("./skills/web-research"))
 ```
 
 ## SKILL.md 형식
@@ -397,6 +451,8 @@ license: MIT
 - **[5-streamlit_strands_agent.py](examples/5-streamlit_strands_agent.py)** - Streamlit 기반 실제 Agent 실행 데모
   - 실제 Strands Agents SDK를 사용한 라이브 실행
   - 질의 입력 시 Agent의 Progressive Disclosure 동작을 실시간으로 확인
+
+자세한 예제 설명은 [examples/README.md](examples/README.md)를 참고하세요.
 
 ## 라이센스
 
