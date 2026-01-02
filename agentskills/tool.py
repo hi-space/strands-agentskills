@@ -110,7 +110,8 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
             header += "---\n\n"
             header += "# Instructions\n\n"
 
-            return header + instructions
+            # return header + instructions
+            return instructions
 
         except Exception as e:
             logger.error(f"Error loading skill '{skill_name}': {e}", exc_info=True)

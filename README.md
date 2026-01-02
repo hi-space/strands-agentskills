@@ -4,8 +4,6 @@
 
 [AgentSkills.io](https://agentskills.io) 표준을 따라 Progressive Disclosure 원칙을 기반으로 설계된, 재사용 가능하고 확장 가능한 Agent Skills 시스템입니다.
 
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
 ## 🎯 프로젝트 소개
 
 ### Agent Skills란?
@@ -294,48 +292,6 @@ response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
 - `SkillActivationError` - 스킬 활성화 실패
 
 ### Progressive Disclosure 함수들
-
-API는 3단계 패턴을 따릅니다:
-
-#### Phase 1: Discovery (metadata만)
-
-```python
-from agentskills import discover_skills, load_metadata, find_skill_md
-from pathlib import Path
-
-# 모든 Skill discovery - metadata만 로드 (~100 tokens/skill)
-skills = discover_skills("./skills")
-
-# 또는 단일 스킬 metadata 읽기
-skill = load_metadata(Path("./skills/web-research"))
-
-# SKILL.md 파일 찾기
-skill_md_path = find_skill_md(Path("./skills/web-research"))
-
-for skill in skills:
-    print(f"{skill.name}: {skill.description}")
-    print(f"  경로: {skill.path}")
-```
-
-#### Phase 2: Activation (Instructions 로드)
-
-```python
-from agentskills import load_instructions
-
-# Skill activation 시 instructions 로드
-instructions = load_instructions(skill.path)
-print(instructions)  # frontmatter 제외한 Markdown body
-```
-
-#### Phase 3: Resources (필요시 로드)
-
-```python
-from agentskills import load_resource
-
-# 필요한 resource 파일 로드
-api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
-helper_script = load_resource(skill.skill_dir, "scripts/helper.py")
-```
 
 ### create_skill_tool(skills, skills_dir)
 
