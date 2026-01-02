@@ -3,6 +3,7 @@
 This module handles parsing of SKILL.md files following the AgentSkills.io specification.
 """
 
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -29,46 +30,49 @@ def find_skill_md(skill_dir: Path) -> Optional[Path]:
     return None
 
 
-def parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Parse YAML frontmatter from SKILL.md content
+def _parse_skill_md(content: str) -> tuple[dict, str]:
+    """Parse SKILL.md content into frontmatter and body
+
+    This is the core parsing function that splits SKILL.md into:
+    - frontmatter: YAML metadata
+    - body: Markdown instructions
 
     Args:
-        content: Raw content of SKILL.md file
+        content: Raw SKILL.md content
 
     Returns:
-        Tuple of (metadata dict, markdown body)
+        Tuple of (frontmatter dict, body string)
 
     Raises:
-        ParseError: If frontmatter is missing or invalid
+        ParseError: If frontmatter is invalid
     """
-    if not content.startswith("---"):
-        raise ParseError("SKILL.md must start with YAML frontmatter (---)")
+    match = re.match(r'^---\s*\n(.*?)\n---\s*\n?(.*)$', content, re.DOTALL)
+    if not match:
+        raise ParseError("SKILL.md must start with YAML frontmatter (---) and close with ---")
 
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        raise ParseError("SKILL.md frontmatter not properly closed with ---")
-
-    frontmatter_str = parts[1]
-    body = parts[2].strip()
+    frontmatter_str = match.group(1)
+    body = match.group(2).strip()
 
     try:
         parsed = strictyaml.load(frontmatter_str)
-        metadata = parsed.data
+        frontmatter = parsed.data
     except strictyaml.YAMLError as e:
         raise ParseError(f"Invalid YAML in frontmatter: {e}")
 
-    if not isinstance(metadata, dict):
+    if not isinstance(frontmatter, dict):
         raise ParseError("SKILL.md frontmatter must be a YAML mapping")
 
     # Ensure metadata field is dict of strings
-    if "metadata" in metadata and isinstance(metadata["metadata"], dict):
-        metadata["metadata"] = {str(k): str(v) for k, v in metadata["metadata"].items()}
+    if "metadata" in frontmatter and isinstance(frontmatter["metadata"], dict):
+        frontmatter["metadata"] = {
+            str(k): str(v) for k, v in frontmatter["metadata"].items()
+        }
 
-    return metadata, body
+    return frontmatter, body
 
 
-def read_metadata(skill_dir: Path):
-    """Read skill metadata from SKILL.md frontmatter (Phase 1: ~100 tokens)
+def load_metadata(skill_dir: str | Path):
+    """Load skill metadata from SKILL.md frontmatter (Phase 1: ~100 tokens)
 
     This is Phase 1 of Progressive Disclosure - loads only lightweight metadata
     without the full instructions body.
@@ -91,17 +95,18 @@ def read_metadata(skill_dir: Path):
     if skill_md is None:
         raise ParseError(f"SKILL.md not found in {skill_dir}")
 
+    # Read file and extract frontmatter (ignoring body)
     content = skill_md.read_text()
-    metadata, _ = parse_frontmatter(content)
+    frontmatter, _ = _parse_skill_md(content)
 
     # Validate required fields
-    if "name" not in metadata:
+    if "name" not in frontmatter:
         raise ValidationError("Missing required field in frontmatter: name")
-    if "description" not in metadata:
+    if "description" not in frontmatter:
         raise ValidationError("Missing required field in frontmatter: description")
 
-    name = metadata["name"]
-    description = metadata["description"]
+    name = frontmatter["name"]
+    description = frontmatter["description"]
 
     if not isinstance(name, str) or not name.strip():
         raise ValidationError("Field 'name' must be a non-empty string")
@@ -113,15 +118,15 @@ def read_metadata(skill_dir: Path):
         description=description.strip(),
         path=str(skill_md.absolute()),
         skill_dir=str(skill_dir.absolute()),
-        license=metadata.get("license"),
-        compatibility=metadata.get("compatibility"),
-        allowed_tools=metadata.get("allowed-tools"),
-        metadata=metadata.get("metadata"),
+        license=frontmatter.get("license"),
+        compatibility=frontmatter.get("compatibility"),
+        allowed_tools=frontmatter.get("allowed-tools"),
+        metadata=frontmatter.get("metadata"),
     )
 
 
-def read_instructions(skill_path: str | Path) -> str:
-    """Read skill instructions from SKILL.md body (Phase 2: <5000 tokens)
+def load_instructions(skill_path: str | Path) -> str:
+    """Load skill instructions from SKILL.md body (Phase 2: <5000 tokens)
 
     This is Phase 2 of Progressive Disclosure - loads the full markdown body
     (instructions) when the skill is activated.
@@ -139,14 +144,14 @@ def read_instructions(skill_path: str | Path) -> str:
 
     try:
         content = skill_path.read_text(encoding="utf-8")
-        _, instructions = parse_frontmatter(content)
+        _, instructions = _parse_skill_md(content)
         return instructions
     except Exception as e:
         raise ParseError(f"Failed to read instructions from {skill_path}: {e}")
 
 
-def read_resource(skill_dir: str | Path, resource_path: str) -> str:
-    """Read a resource file from skill directory (Phase 3: as needed)
+def load_resource(skill_dir: str | Path, resource_path: str) -> str:
+    """Load a resource file from skill directory (Phase 3: as needed)
 
     This is Phase 3 of Progressive Disclosure - loads files from scripts/,
     references/, or assets/ only when explicitly needed.
@@ -162,7 +167,7 @@ def read_resource(skill_dir: str | Path, resource_path: str) -> str:
         ParseError: If resource cannot be read or is outside skill directory
 
     Example:
-        >>> content = read_resource("/path/to/skill", "references/api-docs.md")
+        >>> content = load_resource("/path/to/skill", "references/api-docs.md")
     """
     skill_dir = Path(skill_dir).resolve()
     resource_file = (skill_dir / resource_path).resolve()
@@ -190,15 +195,9 @@ def read_resource(skill_dir: str | Path, resource_path: str) -> str:
         raise ParseError(f"Failed to read resource {resource_path}: {e}")
 
 
-# Backward compatibility alias
-read_properties = read_metadata
-
-
 __all__ = [
     "find_skill_md",
-    "parse_frontmatter",
-    "read_metadata",
-    "read_instructions",
-    "read_resource",
-    "read_properties",  # Backward compatibility
+    "load_metadata",
+    "load_instructions",
+    "load_resource",
 ]

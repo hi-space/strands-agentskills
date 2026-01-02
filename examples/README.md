@@ -62,9 +62,9 @@ python examples/api_usage_demo.py
 
 **시연 내용:**
 - 정확한 함수 시그니처와 사용법
-- `discover_skills()`, `read_metadata()` (Phase 1)
-- `read_instructions()` (Phase 2)
-- `read_resource()` (Phase 3)
+- `discover_skills()`, `load_metadata()` (Phase 1)
+- `load_instructions()` (Phase 2)
+- `load_resource()` (Phase 3)
 - Helper 함수: `generate_skills_prompt()`, `create_skill_tool()`
 
 **추천 대상:** API 레퍼런스 및 구현 세부사항
@@ -89,6 +89,53 @@ python examples/strands_integration.py
 
 ---
 
+### 5. [streamlit_prompt_simulation.py](5-streamlit_prompt_simulation.py) 🎨 시각화 데모
+
+Streamlit 기반의 Progressive Disclosure 시각화 데모입니다. Phase 1→2→3을 탭으로 구분하여 각 단계에서 무엇이 로드되고 Agent의 prompt에 어떻게 포함되는지 확인할 수 있습니다.
+
+```bash
+# Streamlit 설치 필요
+pip install streamlit
+
+# 실행
+streamlit run examples/5-streamlit_prompt_simulation.py
+```
+
+**시연 내용:**
+- **Phase 1 탭**: Discovery - Skills 발견 및 metadata 표시, 생성된 System Prompt 확인
+- **Phase 2 탭**: Activation - Skill 활성화 시뮬레이션, Instructions 로드 및 Tool 호출 추적
+- **Phase 3 탭**: Resources - Resource 파일 목록 및 읽기 시뮬레이션, 토큰 사용량 시각화
+- 각 Phase별 토큰 사용량 추정 및 비교
+- Tool 호출 추적 및 Prompt 내용 실시간 확인
+
+**추천 대상:** Progressive Disclosure의 작동 방식을 시각적으로 이해하고 싶은 경우
+
+---
+
+### 6. [streamlit_strands_agent.py](6-streamlit_strands_agent.py) 🚀 실시간 실행 데모
+
+실제 Strands Agents SDK를 사용하여 질의를 받고 자동으로 Phase 1→2→3을 순차적으로 수행하는 과정을 실시간으로 시각화하는 Streamlit 앱입니다.
+
+```bash
+# Streamlit 설치 필요
+pip install streamlit
+
+# 실행
+streamlit run examples/6-streamlit_strands_agent.py
+```
+
+**시연 내용:**
+- 실제 Strands Agent와의 대화형 인터페이스
+- 질의 입력 시 Agent가 자동으로 Progressive Disclosure 수행
+- 실시간 스트리밍 응답 및 Tool 호출 시각화
+- Phase 1 완료 상태 표시 (Skills 발견, System Prompt 생성)
+- Tool 호출 및 결과를 실시간으로 추적하여 표시
+- 토큰 사용량 실시간 추정
+
+**추천 대상:** 실제 Agent 동작을 실시간으로 확인하고 싶은 경우
+
+---
+
 ## Progressive Disclosure 실제 동작
 
 ### Phase 1: Discovery (시작 시)
@@ -105,23 +152,23 @@ for skill in skills:
 
 ### Phase 2: Activation (필요 시)
 ```python
-from agentskills import read_instructions
+from agentskills import load_instructions
 
 # Tool을 통해 자동
 response = await agent.invoke_async("web-research 스킬 사용해줘")
 
 # 수동
-instructions = read_instructions(skill.path)
+instructions = load_instructions(skill.path)
 # 토큰 비용: <5000 tokens per skill
 ```
 
 ### Phase 3: Resources (참조 시)
 ```python
-from agentskills import read_resource
+from agentskills import load_resource
 
 # instructions에서 참조된 특정 파일 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
-helper = read_resource(skill.skill_dir, "scripts/helper.py")
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
+helper = load_resource(skill.skill_dir, "scripts/helper.py")
 ```
 
 ## 예제 실행
@@ -235,7 +282,7 @@ agent = Agent(
 ```python
 # Agent가 실행 중에 resource 요청 가능
 if "API 문서 로드" in user_request:
-    api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
+    api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
     # 컨텍스트에서 api_docs 사용
 ```
 

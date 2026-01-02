@@ -1,9 +1,9 @@
-"""Tool-Based usage example of Agent Skills
+"""Basic usage example of Agent Skills
 
-This example demonstrates the Tool-Based approach:
-LLM uses the 'skill' tool to load instructions, then file_read for resources.
+This example demonstrates the Filesystem-Based approach (recommended):
+LLM directly reads SKILL.md files using the file_read tool when needed.
 
-For Filesystem-Based approach, see: 1-basic_usage.py
+For Tool-Based approach, see: 2-tool_based_usage.py
 """
 
 import asyncio
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from strands import Agent
 from strands_tools import file_read
-from agentskills import discover_skills, create_skill_tool, generate_skills_prompt
+from agentskills import discover_skills, generate_skills_prompt
 
 
 def print_response(response):
@@ -33,7 +33,7 @@ def print_response(response):
 
 
 async def main():
-    """Tool-based usage example with progressive disclosure"""
+    """Basic usage example with true progressive disclosure"""
 
     # 1. Discover skills (Phase 1: loads only metadata)
     skills_dir = Path(__file__).parent.parent / "skills"
@@ -56,21 +56,19 @@ async def main():
     skills_prompt = generate_skills_prompt(skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
 
-    # 3. Create skill tool
-    skill_tool = create_skill_tool(skills, skills_dir)
+    print("\n" + "=" * 60)
+    print(full_prompt)
+    print("\n" + "=" * 60)
 
-    # 4. Create agent with skill tool + file_read
-    # Progressive Disclosure:
-    # - Phase 1: Metadata in system prompt
-    # - Phase 2: skill(action="instructions") loads instructions
-    # - Phase 3: file_read accesses resources
+    # 3. Create agent with file_read tool
+    # LLM will use file_read to load SKILL.md when needed (progressive disclosure)
     agent = Agent(
         system_prompt=full_prompt,
-        tools=[skill_tool, file_read],
-        model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        tools=[file_read],  # LLM reads SKILL.md on demand
+        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
     )
 
-    # 5. Use the agent
+    # 4. Use the agent
     print("\n" + "=" * 60)
     print("Example 1: Asking about available skills")
     print("=" * 60)
@@ -78,10 +76,10 @@ async def main():
     response = await agent.invoke_async("What skills do you have?")
     print_response(response)
 
-    # 6. Example: LLM will use skill tool to load instructions
+    # 5. Example: LLM will read SKILL.md when needed
     if skills:
         print("\n" + "=" * 60)
-        print("Example 2: LLM uses skill tool for instructions")
+        print("Example 2: LLM reads skill instructions on demand")
         print("=" * 60)
         first_skill = skills[0]
         print(f"\nAsking: 'How do I use the {first_skill.name} skill?'\n")
@@ -89,8 +87,7 @@ async def main():
             f"How do I use the {first_skill.name} skill?"
         )
         print_response(response)
-        print("\n✓ LLM used skill tool to load instructions (progressive disclosure)")
-
+    
 
 if __name__ == "__main__":
     asyncio.run(main())

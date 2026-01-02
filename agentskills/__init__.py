@@ -24,11 +24,9 @@ from .models import SkillProperties
 # Parser functions
 from .parser import (
     find_skill_md,
-    parse_frontmatter,
-    read_metadata,
-    read_instructions,
-    read_resource,
-    read_properties,  # Backward compatibility
+    load_metadata,
+    load_instructions,
+    load_resource,
 )
 
 # Validator functions
@@ -57,13 +55,11 @@ __version__ = "1.0.0"
 __all__ = [
     # Models
     "SkillProperties",
-    # Parser (Progressive Disclosure)
+    # Progressive Disclosure API
     "find_skill_md",
-    "parse_frontmatter",
-    "read_metadata",  # Phase 1: Load metadata only
-    "read_instructions",  # Phase 2: Load instructions
-    "read_resource",  # Phase 3: Load resources
-    "read_properties",  # Backward compatibility (alias for read_metadata)
+    "load_metadata",  # Phase 1: Load metadata only
+    "load_instructions",  # Phase 2: Load instructions
+    "load_resource",  # Phase 3: Load resources
     # Validator
     "validate",
     "validate_metadata",

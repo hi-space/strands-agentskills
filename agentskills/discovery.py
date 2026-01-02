@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List, Optional
 
 # Import from unified modules
-from .parser import find_skill_md, read_properties
+from .parser import find_skill_md, load_metadata
 from .errors import ParseError, ValidationError
 from .models import SkillProperties
 
@@ -107,7 +107,7 @@ def discover_skills(skills_dir: str | Path) -> List[SkillProperties]:
 
         # Parse metadata
         try:
-            skill_props = read_properties(skill_dir)
+            skill_props = load_metadata(skill_dir)
             skills.append(skill_props)
             logger.debug(f"Discovered skill: {skill_props.name}")
 

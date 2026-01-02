@@ -58,7 +58,7 @@ AgentSkills.io의 3단계 로딩 패턴을 구현합니다:
 ```
 agentskills/
 ├── models.py       # SkillProperties (Phase 1 metadata)
-├── parser.py       # read_metadata, read_instructions, read_resource
+├── parser.py       # load_metadata, load_instructions, load_resource
 ├── validator.py    # AgentSkills.io 표준 검증
 ├── discovery.py    # 스킬 디렉토리 스캔 (Phase 1)
 ├── tool.py         # 활성화 로직 (Phase 2)
@@ -94,17 +94,17 @@ response = await agent.invoke_async("web-research 스킬 사용해줘")
 # → LLM이 file_read로 SKILL.md 읽음
 
 # Tool-based: skill 도구 사용
-instructions = skill(skill_name="web-research", action="instructions")
+instructions = skill(skill_name="web-research")
 
 # 또는 프로그래밍 방식으로 직접 읽기
-instructions = read_instructions(skill.path)  # <5000 tokens/skill
+instructions = load_instructions(skill.path)  # <5000 tokens/skill
 ```
 
 ### Phase 3: Resources (참조 시)
 
 ```python
 # 특정 파일만 필요할 때 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
 ```
 
 ## 토큰 효율성
@@ -139,7 +139,7 @@ Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
 agentskills/
 ├── __init__.py      # Public API (16개 exports)
 ├── models.py        # SkillProperties (Phase 1 metadata)
-├── parser.py        # read_metadata, read_instructions, read_resource
+├── parser.py        # load_metadata, load_instructions, load_resource
 ├── validator.py     # 표준 검증
 ├── discovery.py     # 스킬 스캔 (Phase 1)
 ├── tool.py          # 활성화 (Phase 2)
@@ -156,7 +156,7 @@ Phase 1: Discovery (~100 tokens/skill)
 │  ├── skill-a│
 │  └── skill-b│
 └──────┬──────┘
-       │ read_metadata()
+       │ load_metadata()
        ▼
 ┌──────────────────┐
 │ SkillProperties[]│  name, description, path, skill_dir
@@ -170,14 +170,14 @@ Phase 1: Discovery (~100 tokens/skill)
                      │            │
                      │ Phase 2: Activation (<5000 tokens)
                      ▼            │
-              read_instructions() │
+              load_instructions() │
                      │            │
                      └────────────┘
                      │
                      │ Phase 3: Resources (as needed)
                      ▼
-              read_resource("scripts/helper.py")
-              read_resource("references/api.md")
+              load_resource("scripts/helper.py")
+              load_resource("references/api.md")
 ```
 
 ## 설치
@@ -212,7 +212,7 @@ full_prompt = base_prompt + "\n\n" + skills_prompt
 agent = Agent(
     system_prompt=full_prompt,
     tools=[file_read],  # LLM이 필요시 SKILL.md 읽음
-    model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
 
 # 4. Progressive Disclosure 작동:
@@ -237,12 +237,12 @@ skill_tool = create_skill_tool(skills, "./skills")
 agent = Agent(
     system_prompt=base_prompt + "\n\n" + generate_skills_prompt(skills),
     tools=[skill_tool, file_read],  # skill + file_read 조합
-    model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
 )
 
 # Progressive Disclosure 작동:
 # Phase 1: 시스템 프롬프트에 metadata
-# Phase 2: skill(skill_name="web-research", action="instructions")
+# Phase 2: skill(skill_name="web-research")
 # Phase 3: file_read로 resources 읽기
 response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
 ```
@@ -258,13 +258,13 @@ API는 3단계 패턴을 따릅니다:
 #### Phase 1: Discovery (metadata만)
 
 ```python
-from agentskills import discover_skills, read_metadata
+from agentskills import discover_skills, load_metadata
 
 # 모든 Skill discovery - metadata만 로드 (~100 tokens/skill)
 skills = discover_skills("./skills")
 
 # 또는 단일 스킬 metadata 읽기
-skill = read_metadata(Path("./skills/web-research"))
+skill = load_metadata(Path("./skills/web-research"))
 
 for skill in skills:
     print(f"{skill.name}: {skill.description}")
@@ -274,21 +274,21 @@ for skill in skills:
 #### Phase 2: Activation (Instructions 로드)
 
 ```python
-from agentskills import read_instructions
+from agentskills import load_instructions
 
 # Skill activation 시 instructions 로드
-instructions = read_instructions(skill.path)
+instructions = load_instructions(skill.path)
 print(instructions)  # frontmatter 제외한 Markdown body
 ```
 
 #### Phase 3: Resources (필요시 로드)
 
 ```python
-from agentskills import read_resource
+from agentskills import load_resource
 
 # 필요한 resource 파일 로드
-api_docs = read_resource(skill.skill_dir, "references/api-docs.md")
-helper_script = read_resource(skill.skill_dir, "scripts/helper.py")
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
+helper_script = load_resource(skill.skill_dir, "scripts/helper.py")
 ```
 
 ### create_skill_tool(skills, skills_dir)
@@ -307,17 +307,15 @@ agent = Agent(
     tools=[skill_tool, file_read]
 )
 
-# LLM이 사용 가능한 actions:
-# - skill(skill_name="web-research", action="list")      # 모든 스킬 목록
-# - skill(skill_name="web-research", action="info")      # 메타데이터만
-# - skill(skill_name="web-research", action="instructions")  # instructions 로드
+# LLM이 사용하는 방법:
+# - skill(skill_name="web-research")  # instructions 로드
 # - file_read(path="/path/to/skill/scripts/helper.py")  # resources 읽기
 ```
 
 **Progressive Disclosure:**
-- Phase 1: 메타데이터 (시스템 프롬프트)
-- Phase 2: `action="instructions"`로 instructions만 로드
-- Phase 3: `file_read`로 resources 읽기
+- Phase 1: 메타데이터 (시스템 프롬프트) - ~100 tokens/skill
+- Phase 2: `skill(skill_name="...")`로 instructions 로드 - <5000 tokens
+- Phase 3: `file_read`로 resources 읽기 - 필요시만
 
 ### generate_skills_prompt(skills)
 
@@ -380,10 +378,25 @@ license: MIT
 
 완전한 예제는 [examples/](examples/)를 참고하세요:
 
-- **[1-basic_usage.py](examples/1-basic_usage.py)** - Filesystem-Based 방식 (권장)
-- **[2-tool_based_usage.py](examples/2-tool_based_usage.py)** - Tool-Based 방식
-- **[3-api_usage_demo.py](examples/3-api_usage_demo.py)** - API 프로그래밍 방식 사용
-- **[4-strands_integration.py](examples/4-strands_integration.py)** - 완전한 Progressive Disclosure 데모
+- **[1-discovery_skills.py](examples/1-discovery_skills.py)** - Filesystem-Based 방식 기본 예제 (권장)
+  - LLM이 직접 `file_read` 도구를 사용하여 SKILL.md 파일을 읽는 방식
+  - Progressive Disclosure의 Phase 1-2를 자연스럽게 수행
+  
+- **[2-skill_tool_with_progressive_disclosure.py](examples/2-skill_tool_with_progressive_disclosure.py)** - Tool-Based 방식 예제
+  - `skill` 도구를 사용하여 instructions를 로드하는 방식
+  - Phase 1-2의 토큰 사용량을 시각적으로 추적
+  
+- **[3-strands_integration.py](examples/3-strands_integration.py)** - 완전한 Progressive Disclosure 데모
+  - Phase 1 (Discovery), Phase 2 (Activation), Phase 3 (Resources) 전체 흐름 시연
+  - LLM이 필요에 따라 skill과 resource를 읽는 실제 동작 확인
+  
+- **[4-streamlit_prompt_simulation.py](examples/4-streamlit_prompt_simulation.py)** - Streamlit 기반 Progressive Disclosure 시각화
+  - Phase별 토큰 사용량과 prompt 상태를 시각적으로 확인
+  - Skill 활성화 및 Resource 로딩 시뮬레이션
+  
+- **[5-streamlit_strands_agent.py](examples/5-streamlit_strands_agent.py)** - Streamlit 기반 실제 Agent 실행 데모
+  - 실제 Strands Agents SDK를 사용한 라이브 실행
+  - 질의 입력 시 Agent의 Progressive Disclosure 동작을 실시간으로 확인
 
 ## 라이센스
 
