@@ -148,43 +148,6 @@ async def example_phase3_resources(skills, agent):
     print("\n✓ Agent should have read resource files based on SKILL.md instructions (true progressive disclosure)")
 
 
-async def example_interactive_chat(agent):
-    """Example: Interactive chat with agent using skills"""
-    print("\n" + "=" * 60)
-    print("Interactive Chat (Progressive Disclosure in Action)")
-    print("=" * 60)
-    print("\nCommands: 'quit', 'exit', 'q' to stop")
-    print("Try: 'Activate the web-research skill'\n")
-
-    logger = StreamingLogger()
-
-    while True:
-        try:
-            user_input = input("\nYou: ").strip()
-
-            if user_input.lower() in ["quit", "exit", "q"]:
-                print("\nGoodbye!")
-                break
-
-            if not user_input:
-                continue
-
-            # Reset logger for new query
-            logger.reset()
-            
-            print("\nAgent: ", end="")
-            # Use streaming to track tool calls and output chunk text
-            async for event in agent.stream_async(user_input):
-                logger.process_event(event)
-            print()  # New line after response
-
-        except KeyboardInterrupt:
-            print("\n\nGoodbye!")
-            break
-        except Exception as e:
-            print(f"\nError: {e}")
-
-
 async def main():
     """Run all Progressive Disclosure examples"""
     print("\n🚀 Agent Skills with Strands SDK - Progressive Disclosure Demo\n")
@@ -197,7 +160,7 @@ async def main():
         return
 
     # Create agent with file_read tool (LLM will read SKILL.md when needed)
-    base_prompt = "You are a helpful AI assistant with access to specialized skills."
+    base_prompt = "You are a helpful AI assistant."
     skills_prompt = generate_skills_prompt(skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
 
@@ -212,12 +175,6 @@ async def main():
 
     # Phase 3: Resources
     await example_phase3_resources(skills, agent)
-
-    # Interactive chat (optional)
-    print("\n" + "=" * 60)
-    response = input("\nStart interactive chat? (y/N): ").strip().lower()
-    if response == "y":
-        await example_interactive_chat(agent)
 
 
 if __name__ == "__main__":

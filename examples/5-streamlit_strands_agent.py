@@ -134,7 +134,7 @@ def init_session_state():
 
 def create_agent(skills, skills_dir):
     """Strands Agent 생성 (Hook을 사용한 tool 호출 추적)"""
-    base_prompt = "You are a helpful AI assistant with access to specialized skills."
+    base_prompt = "You are a helpful AI assistant."
     skills_prompt = generate_skills_prompt(skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
     

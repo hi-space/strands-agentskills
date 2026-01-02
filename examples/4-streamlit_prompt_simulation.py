@@ -171,7 +171,7 @@ def show_phase1():
     st.divider()
     st.subheader("생성된 System Prompt (Phase 1)")
     
-    base_prompt = "You are a helpful AI assistant with access to specialized skills."
+    base_prompt = "You are a helpful AI assistant."
     skills_prompt = generate_skills_prompt(st.session_state.skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
     
@@ -201,7 +201,7 @@ def show_phase2():
         return
     
     # System Prompt 생성
-    base_prompt = "You are a helpful AI assistant with access to specialized skills."
+    base_prompt = "You are a helpful AI assistant."
     skills_prompt = generate_skills_prompt(st.session_state.skills)
     full_prompt = f"{base_prompt}\n\n{skills_prompt}"
     

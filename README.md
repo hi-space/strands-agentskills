@@ -378,10 +378,25 @@ license: MIT
 
 완전한 예제는 [examples/](examples/)를 참고하세요:
 
-- **[1-basic_usage.py](examples/1-basic_usage.py)** - Filesystem-Based 방식 (권장)
-- **[2-tool_based_usage.py](examples/2-tool_based_usage.py)** - Tool-Based 방식
-- **[3-api_usage_demo.py](examples/3-api_usage_demo.py)** - API 프로그래밍 방식 사용
-- **[4-strands_integration.py](examples/4-strands_integration.py)** - 완전한 Progressive Disclosure 데모
+- **[1-discovery_skills.py](examples/1-discovery_skills.py)** - Filesystem-Based 방식 기본 예제 (권장)
+  - LLM이 직접 `file_read` 도구를 사용하여 SKILL.md 파일을 읽는 방식
+  - Progressive Disclosure의 Phase 1-2를 자연스럽게 수행
+  
+- **[2-skill_tool_with_progressive_disclosure.py](examples/2-skill_tool_with_progressive_disclosure.py)** - Tool-Based 방식 예제
+  - `skill` 도구를 사용하여 instructions를 로드하는 방식
+  - Phase 1-2의 토큰 사용량을 시각적으로 추적
+  
+- **[3-strands_integration.py](examples/3-strands_integration.py)** - 완전한 Progressive Disclosure 데모
+  - Phase 1 (Discovery), Phase 2 (Activation), Phase 3 (Resources) 전체 흐름 시연
+  - LLM이 필요에 따라 skill과 resource를 읽는 실제 동작 확인
+  
+- **[4-streamlit_prompt_simulation.py](examples/4-streamlit_prompt_simulation.py)** - Streamlit 기반 Progressive Disclosure 시각화
+  - Phase별 토큰 사용량과 prompt 상태를 시각적으로 확인
+  - Skill 활성화 및 Resource 로딩 시뮬레이션
+  
+- **[5-streamlit_strands_agent.py](examples/5-streamlit_strands_agent.py)** - Streamlit 기반 실제 Agent 실행 데모
+  - 실제 Strands Agents SDK를 사용한 라이브 실행
+  - 질의 입력 시 Agent의 Progressive Disclosure 동작을 실시간으로 확인
 
 ## 라이센스
 

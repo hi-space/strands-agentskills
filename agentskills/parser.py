@@ -3,6 +3,7 @@
 This module handles parsing of SKILL.md files following the AgentSkills.io specification.
 """
 
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -29,8 +30,8 @@ def find_skill_md(skill_dir: Path) -> Optional[Path]:
     return None
 
 
-def _extract_yaml_frontmatter(content: str) -> tuple[dict, str]:
-    """Extract YAML frontmatter and markdown body from content
+def _parse_skill_md(content: str) -> tuple[dict, str]:
+    """Parse SKILL.md content into frontmatter and body
 
     This is the core parsing function that splits SKILL.md into:
     - frontmatter: YAML metadata
@@ -45,15 +46,12 @@ def _extract_yaml_frontmatter(content: str) -> tuple[dict, str]:
     Raises:
         ParseError: If frontmatter is invalid
     """
-    if not content.startswith("---"):
-        raise ParseError("SKILL.md must start with YAML frontmatter (---)")
+    match = re.match(r'^---\s*\n(.*?)\n---\s*\n?(.*)$', content, re.DOTALL)
+    if not match:
+        raise ParseError("SKILL.md must start with YAML frontmatter (---) and close with ---")
 
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        raise ParseError("SKILL.md frontmatter not properly closed with ---")
-
-    frontmatter_str = parts[1]
-    body = parts[2].strip()
+    frontmatter_str = match.group(1)
+    body = match.group(2).strip()
 
     try:
         parsed = strictyaml.load(frontmatter_str)
@@ -99,7 +97,7 @@ def load_metadata(skill_dir: str | Path):
 
     # Read file and extract frontmatter (ignoring body)
     content = skill_md.read_text()
-    frontmatter, _ = _extract_yaml_frontmatter(content)
+    frontmatter, _ = _parse_skill_md(content)
 
     # Validate required fields
     if "name" not in frontmatter:
@@ -146,7 +144,7 @@ def load_instructions(skill_path: str | Path) -> str:
 
     try:
         content = skill_path.read_text(encoding="utf-8")
-        _, instructions = _extract_yaml_frontmatter(content)
+        _, instructions = _parse_skill_md(content)
         return instructions
     except Exception as e:
         raise ParseError(f"Failed to read instructions from {skill_path}: {e}")
