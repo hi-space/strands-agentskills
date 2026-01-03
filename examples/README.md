@@ -1,5 +1,7 @@
 # Agent Skills 예제
 
+**[English](README_en.md) | 한국어**
+
 Strands Agents SDK에서 Agent Skills를 사용하는 완전한 예제들입니다.
 
 ## 사전 준비

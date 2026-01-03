@@ -1,5 +1,7 @@
 # Agent Skills for Strands Agents SDK
 
+**[English](README_en.md) | 한국어**
+
 **Strands Agents SDK에서 Agent Skills 을 사용하기 위한 기본 아키텍처**
 
 [AgentSkills.io](https://agentskills.io) 표준을 Strands Agents SDK에서 활용할 수 있도록 구현한 패키지입니다. Progressive Disclosure 원칙을 기반으로 설계된 재사용 가능하고 확장 가능한 Agent Skills 시스템을 제공합니다.
