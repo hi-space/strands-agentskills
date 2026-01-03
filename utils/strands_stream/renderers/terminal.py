@@ -166,15 +166,14 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         print(separator)
         # Show tool_input if available
         if tool_input:
-            print("Tool Input:")
-            print(json.dumps(tool_input, indent=2, ensure_ascii=False))
+            print(self._colorize(json.dumps(tool_input, indent=2, ensure_ascii=False), Style.BRIGHT, Fore.CYAN))
             print(separator)
         # Show stream data
         if event.data:
             if isinstance(event.data, str):
-                print(event.data)
+                print(self._colorize(event.data, Style.BRIGHT, Fore.CYAN))
             else:
-                print(json.dumps(event.data, indent=2, ensure_ascii=False))
+                print(self._colorize(json.dumps(event.data, indent=2, ensure_ascii=False), Style.BRIGHT, Fore.CYAN))
         print(f"{separator}\n")
         return None
     
