@@ -110,16 +110,23 @@ flowchart TB
     style P3 fill:#fff3e0
 ```
 
-- **Pattern 1: File-based**: LLM이 직접 파일을 읽습니다. 가장 유연하고 토큰 효율적입니다.
-- **Pattern 2: Tool-based**: `skill` 도구로 instructions를 명시적으로 로드합니다. **구조화된 접근**이 필요한 경우 사용합니다.
-- **Pattern 3: Meta-Tool (Agent as Tool)**: Meta-Tool 접근 방식으로, 각 Skill이 독립된 Sub-agent를 tool로 사용하여 격리 실행됩니다.
+**Pattern 1: File-based**
+: LLM이 직접 파일을 읽습니다. 가장 유연하고 토큰 효율적입니다.
+
+**Pattern 2: Tool-based**
+: `skill` 도구로 instructions를 명시적으로 로드합니다. **구조화된 접근**이 필요한 경우 사용합니다.
+
+**Pattern 3: Meta-Tool (Agent as Tool)**
+: Meta-Tool 접근 방식으로, 각 Skill이 독립된 Sub-agent를 tool로 사용하여 격리 실행됩니다.
   - **완전한 격리**: 각 Skill은 독립된 Sub-agent에서 실행 (as a tool)
   - **명시적 제어**: Skill 실행이 명확하게 드러남
   - **Context 독립성**: Main agent와 Sub-agent의 context 분리
   - **도구 제한**: Skill별로 제공할 도구를 명시적으로 지정
 
+#### 패턴 비교
+
 | 측면 | File-based | Tool-based | Meta-Tool |
-|------|-----------|------------|-----------|
+|:-----|:-----------|:-----------|:----------|
 | **실행 방식** | LLM 직접 파일 읽기 | Context에 주입 | 격리된 Sub-agent |
 | **Context 격리** | ❌ 공유 | ❌ 공유 | ✅ 완전 격리 |
 | **유연성** | ✅ 높음 | ⚠️ 중간 | ⚠️ 낮음 |
@@ -127,9 +134,9 @@ flowchart TB
 | **복잡도** | ✅ 낮음 | ⚠️ 중간 | ⚠️ 높음 |
 | **추천 사용처** | 일반적인 경우 | 명시적 제어 필요시 | 복잡한 격리 실행 |
 
-**Inline Mode (Pattern 1, 2)** — 단순한 워크플로우, LLM의 자연스러운 skill 선택, 경량 구현 시 선택
-
-**Multi-Agent Mode (Pattern 3)** — Skill 간 격리, 명시적 제어, Skill별 도구 분리, 사용량 추적 필요 시 선택
+> 💡 **선택 가이드**
+> - **Inline Mode (Pattern 1, 2)** — 단순한 워크플로우, LLM의 자연스러운 skill 선택, 경량 구현 시 선택
+> - **Multi-Agent Mode (Pattern 3)** — Skill 간 격리, 명시적 제어, Skill별 도구 분리, 사용량 추적 필요 시 선택
 
 ### 3가지 패턴의 데이터 흐름
 
