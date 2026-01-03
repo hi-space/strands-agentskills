@@ -59,7 +59,8 @@ agentskills/
 ├── parser.py       # load_metadata, load_instructions, load_resource
 ├── validator.py    # AgentSkills.io 표준 검증
 ├── discovery.py    # 스킬 디렉토리 스캔 (Phase 1)
-├── tool.py         # 활성화 로직 (Phase 2)
+├── tool.py         # Inline 모드 - skill tool (Phase 2)
+├── agent_tool.py   # Agent as Tool 모드 - sub-agent 격리 실행
 ├── prompt.py       # 시스템 프롬프트 생성
 └── errors.py       # 예외 계층 구조
 ```
@@ -138,12 +139,13 @@ Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
 
 ```
 agentskills/
-├── __init__.py      # Public API (18개 exports)
+├── __init__.py      # Public API
 ├── models.py        # SkillProperties (Phase 1 metadata)
 ├── parser.py        # load_metadata, load_instructions, load_resource, find_skill_md
 ├── validator.py     # validate, validate_metadata (표준 검증)
 ├── discovery.py     # discover_skills (스킬 스캔, Phase 1)
-├── tool.py          # create_skill_tool (활성화, Phase 2)
+├── tool.py          # create_skill_tool - Inline 모드 (Phase 2)
+├── agent_tool.py    # create_skill_agent_tool - Agent as Tool 모드 (격리 실행)
 ├── prompt.py        # generate_skills_prompt (시스템 프롬프트 생성)
 └── errors.py        # 예외 계층 구조 (5개 예외 클래스)
 ```
@@ -262,11 +264,75 @@ response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
 
 **두 방식 모두 Progressive Disclosure를 완벽히 지원합니다!**
 
+### 방식 3: Meta-Tool Mode (Agent as Tool 패턴)
+
+각 Skill을 격리된 Sub-agent에서 tool로 실행합니다. 모듈화된 실행이 필요한 경우 사용.
+
+```python
+from agentskills import discover_skills, create_skill_agent_tool, generate_skills_prompt
+from strands import Agent
+from strands_tools import file_read, web_search
+
+# 1. Skill discovery (Phase 1)
+skills = discover_skills("./skills")
+
+# 2. Skill agent tool 생성 (Agent as Tool 패턴)
+skill_agent_tool = create_skill_agent_tool(
+    skills,
+    "./skills",
+    additional_tools=[file_read, web_search]  # Sub-agent에게 제공할 tools
+)
+
+# 3. System prompt 생성
+base_prompt = """You are a helpful AI assistant with specialized skills.
+Use the use_skill tool to execute skills in isolated sub-agents."""
+
+full_prompt = base_prompt + "\n\n" + generate_skills_prompt(skills)
+
+# 4. Main agent 생성
+agent = Agent(
+    system_prompt=full_prompt,
+    tools=[skill_agent_tool],
+    model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+)
+
+# Progressive Disclosure + Meta-Tool:
+# Phase 1: 시스템 프롬프트에 metadata
+# Phase 2: use_skill(skill_name, request) 호출
+# Phase 3: Sub-agent가 SKILL.md를 system prompt로 받아 실행
+response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
+```
+
+**Meta-Tool Mode의 특징:**
+- ✅ **완전한 격리**: 각 Skill은 독립된 Sub-agent에서 실행 (as a tool)
+- ✅ **명시적 제어**: Skill 실행이 명확하게 드러남
+- ✅ **Context 독립성**: Main agent와 Sub-agent의 context 분리
+- ✅ **도구 제한**: Skill별로 제공할 도구를 명시적으로 지정
+
+**언제 Meta-Tool Mode를 사용할까?**
+- 모듈화된 작업 위임이 필요할 때
+- Skill 실행을 명시적으로 추적해야 할 때
+- Main agent와 Skill agent의 context를 완전히 분리하고 싶을 때
+- Skill별로 다른 도구 세트를 제공해야 할 때
+
+### Inline vs Meta-Tool 비교
+
+| 측면 | Inline Mode | Meta-Tool Mode |
+|------|-------------|------------------|
+| 실행 방식 | Main agent context | 격리된 Sub-agent (as a tool) |
+| Instructions | Context에 로드 | Sub-agent system prompt |
+| Context 격리 | ❌ 공유 | ✅ 완전 격리 |
+| 복잡도 | ✅ 간단 | ⚠️ 높음 |
+| 제어 | 암묵적 | ✅ 명시적 |
+| 추천 사용처 | 일반적인 경우 | 모듈화된 실행 필요시 |
+
+**대부분의 경우 Inline Mode (방식 1 또는 2)를 권장합니다.**
+
 ## 핵심 API
 
 ### 전체 Public API 목록
 
-이 패키지는 다음 18개의 함수/클래스를 export합니다:
+이 패키지는 다음 20개의 함수/클래스를 export합니다:
 
 **Models:**
 - `SkillProperties` - Skill 메타데이터 데이터 클래스
@@ -284,7 +350,9 @@ response = await agent.invoke_async("양자 컴퓨팅에 대해 조사해줘")
 
 **Prompt & Tool:**
 - `generate_skills_prompt()` - 시스템 프롬프트 생성
-- `create_skill_tool()` - Skill 활성화 도구 생성
+- `create_skill_tool()` - Inline mode: Skill 활성화 도구 생성
+- `create_skill_agent_tool()` - **NEW!** Meta-Tool mode: Sub-agent를 tool로 사용하는 도구 생성 (Agent as Tool)
+
 
 **Errors:**
 - `SkillError` - 기본 예외 클래스
@@ -320,6 +388,42 @@ agent = Agent(
 - Phase 1: 메타데이터 (시스템 프롬프트) - ~100 tokens/skill
 - Phase 2: `skill(skill_name="...")`로 instructions 로드 - <5000 tokens
 - Phase 3: `file_read`로 resources 읽기 - 필요시만
+
+### create_skill_agent_tool(skills, skills_dir, base_agent_model, additional_tools)
+
+Meta-Tool 모드를 위한 `use_skill` 도구 생성. 각 Skill을 격리된 Sub-agent (as a tool)에서 실행합니다.
+
+```python
+from agentskills import create_skill_agent_tool
+from strands import Agent
+from strands_tools import file_read, web_search
+
+skill_agent_tool = create_skill_agent_tool(
+    skills,
+    "./skills",
+    base_agent_model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",  # 선택사항
+    additional_tools=[file_read, web_search]  # Sub-agent에게 제공할 tools
+)
+
+agent = Agent(
+    tools=[skill_agent_tool]
+)
+
+# LLM이 사용하는 방법:
+# - use_skill(skill_name="web-research", request="양자 컴퓨팅 조사")
+# → Sub-agent 생성하여 격리 실행
+```
+
+**Progressive Disclosure + Multi-Agent:**
+- Phase 1: 메타데이터 (시스템 프롬프트) - ~100 tokens/skill
+- Phase 2: `use_skill(skill_name, request)` 호출 시
+- Phase 3: Sub-agent가 SKILL.md를 system prompt로 받아 실행
+
+**Parameters:**
+- `skills`: 발견된 skill 목록
+- `skills_dir`: Skill 디렉토리 경로
+- `base_agent_model`: Sub-agent에서 사용할 기본 모델 (선택사항)
+- `additional_tools`: Sub-agent에게 제공할 도구 목록 (선택사항)
 
 ### generate_skills_prompt(skills)
 
@@ -409,6 +513,20 @@ license: MIT
 - **[5-streamlit_strands_agent.py](examples/5-streamlit_strands_agent.py)** - Streamlit 기반 실제 Agent 실행 데모
   - 실제 Strands Agents SDK를 사용한 라이브 실행
   - 질의 입력 시 Agent의 Progressive Disclosure 동작을 실시간으로 확인
+
+- **[6-multiagent_mode.py](examples/6-multiagent_mode.py)** - **NEW!** Inline vs Multi-Agent 모드 비교
+  - 두 가지 실행 모드의 차이점과 장단점 비교
+  - 각 모드의 작동 방식과 사용 사례 설명
+
+- **[7-streamlit_multiagent.py](examples/7-streamlit_multiagent.py)** - **NEW!** Streamlit Multi-Agent 모드 데모
+  - 세 가지 실행 모드를 실시간으로 비교
+  - Multi-agent 모드에서 Sub-agent 실행 과정 시각화
+  - Tool 호출과 결과를 실시간 스트리밍으로 표시
+
+- **[8-streamlit_subagent_streaming.py](examples/8-streamlit_subagent_streaming.py)** - **NEW!** Sub-Agent 스트리밍 상세 데모
+  - Sub-agent의 모든 실행 과정을 실시간으로 표시
+  - Tool 호출, 중간 응답, 최종 결과를 스트리밍으로 확인
+  - Skill별 독립 실행 및 디버깅에 최적화
 
 자세한 예제 설명은 [examples/README.md](examples/README.md)를 참고하세요.
 

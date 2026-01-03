@@ -1,7 +1,9 @@
-"""Skill tools for Strands Agents
+"""Skill tool for Strands Agents (Inline Mode)
 
-This module creates Strands tools for progressive disclosure of skills.
-Supports both filesystem-based (recommended) and tool-based approaches.
+This module creates a Strands tool for progressive disclosure of skills.
+The skill tool loads instructions into the main agent's context.
+
+For Agent as Tool pattern (isolated sub-agents), see agent_tool.py
 """
 
 import logging
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
-    """Create a Strands tool for skill activation
+    """Create a Strands tool for skill activation (Inline Mode)
 
     This factory function creates a tool that implements Progressive Disclosure:
     - Phase 1: Metadata in system prompt (already loaded)

@@ -13,7 +13,8 @@ Core Components:
     - parser: SKILL.md parsing (YAML frontmatter)
     - validator: Validation against AgentSkills.io spec
     - discovery: Skill directory scanning
-    - tool: Strands tool integration
+    - tool: Inline skill tool (loads instructions into main agent context)
+    - agent_tool: Agent as Tool pattern (isolated sub-agent execution)
     - prompt: System prompt generation
     - errors: Exception hierarchy
 """
@@ -38,8 +39,11 @@ from .discovery import discover_skills
 # Prompt generation
 from .prompt import generate_skills_prompt
 
-# Tool
+# Tool (Inline Mode)
 from .tool import create_skill_tool
+
+# Agent Tool (Agent as Tool Mode)
+from .agent_tool import create_skill_agent_tool
 
 # Errors
 from .errors import (
@@ -67,8 +71,10 @@ __all__ = [
     "discover_skills",
     # Prompt
     "generate_skills_prompt",
-    # Tool
+    # Tool (Inline Mode)
     "create_skill_tool",
+    # Agent Tool (Agent as Tool Mode)
+    "create_skill_agent_tool",
     # Errors
     "SkillError",
     "ParseError",

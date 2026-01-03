@@ -1,0 +1,240 @@
+"""Skill agent tool for Strands Agents (Agent as Tool Mode)
+
+This module creates a Strands tool that executes skills in isolated sub-agents.
+Each skill runs in a separate agent with its own context and system prompt.
+
+For inline mode (instructions loaded into main agent), see tool.py
+"""
+
+import logging
+from pathlib import Path
+from typing import List, Optional, Any, AsyncIterator
+
+from strands import tool, Agent
+
+from .models import SkillProperties
+from .errors import SkillNotFoundError, SkillActivationError
+from .parser import load_instructions
+
+logger = logging.getLogger(__name__)
+
+
+def create_skill_agent_tool(
+    skills: List[SkillProperties],
+    skills_dir: str | Path,
+    base_agent_model: Optional[str] = None,
+    additional_tools: Optional[List[Any]] = None
+):
+    """Create a Strands tool that uses sub-agent for skill execution (Agent as Tool pattern)
+
+    This factory function creates a tool that implements the "Agent as Tool" pattern
+    with real-time streaming of sub-agent events:
+    - Each skill runs in an isolated sub-agent (used as a tool)
+    - Skill instructions become the sub-agent's system prompt
+    - Complete isolation from main agent context
+    - Streams intermediate events via tool_stream_event
+    - Uses Strands SDK's recommended AsyncIterator pattern
+
+    Args:
+        skills: List of discovered skill properties
+        skills_dir: Base directory containing skills
+        base_agent_model: Default model for sub-agents (optional)
+        additional_tools: Tools to provide to sub-agents (optional)
+
+    Returns:
+        A Strands tool function decorated with @tool
+
+    Example:
+        >>> from agentskills import discover_skills, create_skill_agent_tool
+        >>> from strands import Agent
+        >>> from strands_tools import web_search
+        >>>
+        >>> skills = discover_skills("./skills")
+        >>> skill_tool = create_skill_agent_tool(
+        ...     skills,
+        ...     "./skills",
+        ...     additional_tools=[web_search]
+        ... )
+        >>>
+        >>> # Process sub-agent events via tool_stream_event
+        >>> agent = Agent(tools=[skill_tool], callback_handler=None)
+        >>> async for event in agent.stream_async("Use web-research skill"):
+        ...     if tool_stream := event.get("tool_stream_event"):
+        ...         data = tool_stream.get("data", {})
+        ...         if isinstance(data, dict) and "event" in data:
+        ...             print(f"Sub-agent: {data['skill_name']}")
+    """
+    skills_dir = Path(skills_dir).expanduser().resolve()
+
+    # Create a lookup map for fast skill access
+    skill_map = {skill.name: skill for skill in skills}
+
+    # Default model
+    model = base_agent_model or "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+
+    @tool
+    async def use_skill(skill_name: str, request: str) -> AsyncIterator:
+        """Execute a skill in an isolated sub-agent with real-time streaming.
+
+        This tool activates a specialized skill and runs it in a separate agent
+        with its own context and instructions. The skill agent will process
+        your request and stream intermediate events (tool calls, text generation)
+        before returning the final result.
+
+        Args:
+            skill_name: Name of the skill to use (see system prompt for available skills)
+            request: Your specific request or task for the skill to accomplish
+
+        Yields:
+            dict: Intermediate events with keys: skill_name, agent, event
+
+        Returns:
+            Result from the skill execution
+
+        Example:
+            use_skill(skill_name="web-research", request="Research quantum computing trends")
+        """
+        # Validate skill exists
+        if skill_name not in skill_map:
+            available = ", ".join(skill_map.keys())
+            raise SkillNotFoundError(
+                f"Skill '{skill_name}' not found. "
+                f"Available skills: {available}"
+            )
+
+        skill = skill_map[skill_name]
+
+        try:
+            logger.info(f"Streaming skill '{skill_name}' execution in sub-agent")
+
+            # Load skill instructions
+            instructions = load_instructions(skill.path)
+
+            # Create sub-agent for this skill
+            sub_agent = _create_skill_agent(skill, instructions, model, additional_tools)
+
+            result = None
+
+            # Stream events from sub-agent and yield them wrapped in dict
+            # This pattern is from Strands SDK documentation: "Sub-Agent Streaming Example"
+            async for event in sub_agent.stream_async(request):
+                # Yield each event wrapped in dict for main agent to process
+                yield {
+                    "skill_name": skill_name,
+                    "agent": sub_agent,
+                    "event": event
+                }
+
+                # Capture the final result
+                if "result" in event:
+                    result = event["result"]
+
+            logger.info(f"Skill '{skill_name}' execution completed")
+
+            # Yield final result string (this becomes the tool's return value)
+            if result is not None:
+                yield str(result.message) if hasattr(result, 'message') else str(result)
+            else:
+                yield f"Skill '{skill_name}' completed successfully"
+
+        except Exception as e:
+            logger.error(f"Error executing skill '{skill_name}': {e}", exc_info=True)
+            raise SkillActivationError(
+                f"Failed to execute skill '{skill_name}': {e}"
+            ) from e
+
+    return use_skill
+
+
+def _create_skill_agent(
+    skill: SkillProperties,
+    instructions: str,
+    model: str,
+    additional_tools: Optional[List[Any]] = None
+) -> Agent:
+    """Create a sub-agent configured for a specific skill
+
+    Args:
+        skill: The skill's properties (metadata)
+        instructions: Full skill instructions from SKILL.md
+        model: Model to use for the sub-agent
+        additional_tools: Optional additional tools
+
+    Returns:
+        Configured Agent instance
+    """
+    skill_name = skill.name
+
+    # Build system prompt with skill context
+    system_prompt = _build_system_prompt(skill, instructions)
+
+    # Determine which tools to provide
+    tools = []
+    if additional_tools:
+        tools.extend(additional_tools)
+
+    logger.debug(
+        f"Creating sub-agent for skill '{skill_name}': "
+        f"model={model}, tools={len(tools)}"
+    )
+
+    # Create sub-agent
+    agent = Agent(
+        model=model,
+        tools=tools if tools else None,
+        system_prompt=system_prompt,
+        name=f"skill-{skill_name}",
+        callback_handler=None,
+    )
+
+    return agent
+
+
+def _build_system_prompt(skill: SkillProperties, instructions: str) -> str:
+    """Build system prompt for the sub-agent
+
+    Combines skill metadata with instructions to create
+    a complete system prompt for the skill agent.
+
+    Args:
+        skill: The skill's properties
+        instructions: Full skill instructions
+
+    Returns:
+        Complete system prompt
+    """
+    # Build header with skill context
+    header = f"""# Skill: {skill.name}
+
+**Description:** {skill.description}
+
+**Skill Directory:** `{skill.skill_dir}/`
+"""
+
+    # Add allowed-tools reminder if specified
+    if skill.allowed_tools:
+        header += f"\n**IMPORTANT:** Only use these tools: `{skill.allowed_tools}`\n"
+
+    # Scan and list available resources
+    skill_dir = Path(skill.skill_dir)
+    resources = []
+    for subdir in ["scripts", "references", "assets"]:
+        resource_dir = skill_dir / subdir
+        if resource_dir.exists() and resource_dir.is_dir():
+            for file_path in sorted(resource_dir.rglob("*")):
+                if file_path.is_file():
+                    resources.append(str(file_path.absolute()))
+
+    if resources:
+        header += "\n**Available Resources:**\n"
+        for resource in resources:
+            header += f"- `{resource}`\n"
+
+    header += "\n---\n\n"
+
+    # Return complete system prompt
+    return header + instructions
+
+
+__all__ = ["create_skill_agent_tool"]
+

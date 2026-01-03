@@ -6,7 +6,7 @@ Strands Agents SDK와 Progressive Disclosure를 사용하는 완전한 예제들
 
 ```bash
 # 의존성 설치
-pip install strands strictyaml
+pip install strands-agents strands-agents-tools pyyaml
 
 # agentskills 설치
 cd strands_agentskills
@@ -15,81 +15,63 @@ pip install -e .
 
 ## 예제 목록
 
-### 1. [basic_usage.py](basic_usage.py) ⭐ 여기서 시작
+### 1. [1-discovery_skills.py](1-discovery_skills.py) ⭐ 여기서 시작
 
-Strands SDK와 Agent Skills의 가장 간단한 사용법입니다.
+Filesystem-Based 접근 방식의 기본 예제입니다. 3단계 Progressive Disclosure를 완전히 보여줍니다.
 
 ```bash
-python examples/basic_usage.py
+python examples/1-discovery_skills.py
 ```
 
 **시연 내용:**
-- Phase 1: Skill discovery (metadata만)
-- Skill tool 생성
-- 시스템 프롬프트 생성
-- Strands Agent 생성 및 사용
+- **Phase 1**: Skill discovery (metadata만 system prompt에 로드)
+- **Phase 2**: LLM이 file_read로 SKILL.md 읽기 (true progressive disclosure)
+- **Phase 3**: LLM이 필요시 resources 읽기
+- TerminalStreamRenderer로 컬러풀한 스트리밍 출력
 
-**추천 대상:** 빠른 통합 가이드가 필요한 경우
+**추천 대상:** 빠른 통합 가이드가 필요한 경우, 가장 자연스러운 사용 방식
 
 ---
 
-### 2. [progressive_disclosure_demo.py](progressive_disclosure_demo.py)
+### 2. [2-skill_tool_with_progressive_disclosure.py](2-skill_tool_with_progressive_disclosure.py) 🔧 Tool-Based
 
-3단계 Progressive Disclosure를 토큰 추적과 함께 시각적으로 보여줍니다.
+Tool-Based 접근 방식의 예제입니다. skill tool을 통해 명시적으로 instructions를 로드합니다.
 
 ```bash
-python examples/progressive_disclosure_demo.py
+python examples/2-skill_tool_with_progressive_disclosure.py
 ```
 
 **시연 내용:**
 - **Phase 1**: Discovery - metadata 로드 (~100 tokens/skill)
-- **Phase 2**: Activation - Instructions 로드 (<5000 tokens)
-- **Phase 3**: Resources - 필요시 파일 로드
+- **Phase 1.5**: System prompt 생성 및 skill tool 연결
+- **Phase 2**: skill(skill_name=...) 호출로 instructions 로드
 - 각 단계별 토큰 사용량 추정
-- 완전한 흐름 시각화
+- 구조화된 접근 방식
 
-**추천 대상:** Progressive Disclosure의 작동 방식 이해
+**추천 대상:** 명시적 skill activation이 필요한 경우
 
 ---
 
-### 3. [api_usage_demo.py](api_usage_demo.py) 📚 API 레퍼런스
+### 3. [3-skill_agent_tool.py](3-skill_agent_tool.py) 🔗 Meta-Tool Mode (Agent as Tool)
 
-각 단계별 정확한 API 호출을 코드 예제와 함께 보여줍니다.
+Meta-Tool 접근 방식의 예제입니다. 각 Skill이 독립된 Sub-agent를 tool로 사용하여 격리 실행됩니다.
 
 ```bash
-python examples/api_usage_demo.py
+python examples/3-skill_agent_tool.py
 ```
 
 **시연 내용:**
-- 정확한 함수 시그니처와 사용법
-- `discover_skills()`, `load_metadata()` (Phase 1)
-- `load_instructions()` (Phase 2)
-- `load_resource()` (Phase 3)
-- Helper 함수: `generate_skills_prompt()`, `create_skill_tool()`
+- Skill agent tool 생성 (use_skill) - Agent as Tool 패턴
+- 각 skill이 isolated sub-agent (as a tool)에서 실행
+- Sub-agent가 자체 context와 SKILL.md를 system prompt로 사용
+- 완전한 context 분리 (main agent와 격리)
+- Sub-agent에 file_read, file_write, shell 도구 제공
 
-**추천 대상:** API 레퍼런스 및 구현 세부사항
-
----
-
-### 4. [strands_integration.py](strands_integration.py) 🤖 완전한 통합
-
-Strands Agent와 Progressive Disclosure의 완전한 통합 예제입니다.
-
-```bash
-python examples/strands_integration.py
-```
-
-**시연 내용:**
-- 완전한 Strands Agent 통합
-- Skill activation를 포함한 대화형 채팅
-- Tool을 통한 자동 Phase 2 활성화
-- 실제 사용 패턴
-
-**추천 대상:** 프로덕션 통합 예제
+**추천 대상:** Context 격리가 필요한 경우, 모듈화된 실행이 필요한 경우
 
 ---
 
-### 5. [streamlit_prompt_simulation.py](5-streamlit_prompt_simulation.py) 🎨 시각화 데모
+### 4. [4-streamlit_prompt_simulation.py](4-streamlit_prompt_simulation.py) 🎨 시각화 데모
 
 Streamlit 기반의 Progressive Disclosure 시각화 데모입니다. Phase 1→2→3을 탭으로 구분하여 각 단계에서 무엇이 로드되고 Agent의 prompt에 어떻게 포함되는지 확인할 수 있습니다.
 
@@ -98,7 +80,7 @@ Streamlit 기반의 Progressive Disclosure 시각화 데모입니다. Phase 1→
 pip install streamlit
 
 # 실행
-streamlit run examples/5-streamlit_prompt_simulation.py
+streamlit run examples/4-streamlit_prompt_simulation.py
 ```
 
 **시연 내용:**
@@ -112,27 +94,37 @@ streamlit run examples/5-streamlit_prompt_simulation.py
 
 ---
 
-### 6. [streamlit_strands_agent.py](6-streamlit_strands_agent.py) 🚀 실시간 실행 데모
+### 5. [5-streamlit_strands_integration.py](5-streamlit_strands_integration.py) 🚀 세 가지 모드 비교 데모
 
-실제 Strands Agents SDK를 사용하여 질의를 받고 자동으로 Phase 1→2→3을 순차적으로 수행하는 과정을 실시간으로 시각화하는 Streamlit 앱입니다.
+세 가지 Agent Skills 실행 모드(File-based, Tool-based, Multi-Agent)를 비교하고 실시간으로 동작을 확인할 수 있는 Streamlit 앱입니다.
 
 ```bash
 # Streamlit 설치 필요
 pip install streamlit
 
 # 실행
-streamlit run examples/6-streamlit_strands_agent.py
+streamlit run examples/5-streamlit_strands_integration.py
 ```
 
 **시연 내용:**
-- 실제 Strands Agent와의 대화형 인터페이스
-- 질의 입력 시 Agent가 자동으로 Progressive Disclosure 수행
+- **File-based Mode**: LLM이 file_read로 SKILL.md 직접 읽기 (가장 자연스러운 방식)
+- **Tool-based Mode**: skill tool 호출을 통한 명시적 activation
+- **Meta-Tool Mode**: Sub-agent를 tool로 사용하여 격리 실행 (Agent as Tool 패턴)
 - 실시간 스트리밍 응답 및 Tool 호출 시각화
-- Phase 1 완료 상태 표시 (Skills 발견, System Prompt 생성)
-- Tool 호출 및 결과를 실시간으로 추적하여 표시
-- 토큰 사용량 실시간 추정
+- 모드 간 전환 및 비교
+- StreamlitStreamRenderer로 Sub-agent 이벤트 처리
 
-**추천 대상:** 실제 Agent 동작을 실시간으로 확인하고 싶은 경우
+**추천 대상:** 세 가지 모드의 차이점을 비교하고 싶은 경우, 실제 Agent 동작 확인
+
+---
+
+## 세 가지 실행 모드 비교
+
+| 모드 | 파일 | 특징 | 추천 대상 |
+|------|------|------|----------|
+| **File-based** | 1-discovery_skills.py | LLM이 file_read로 직접 읽기 | 가장 자연스러운 방식 |
+| **Tool-based** | 2-skill_tool_with_progressive_disclosure.py | skill tool로 명시적 로드 | 구조화된 접근 필요시 |
+| **Meta-Tool** | 3-skill_agent_tool.py | Sub-agent를 tool로 사용 | Context 분리 필요시 |
 
 ---
 
@@ -171,6 +163,8 @@ api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
 helper = load_resource(skill.skill_dir, "scripts/helper.py")
 ```
 
+---
+
 ## 예제 실행
 
 `skills/` 디렉토리에 Skill이 있는지 확인하세요:
@@ -189,59 +183,58 @@ skills/
 
 스킬 형식 표준은 [AgentSkills.io](https://agentskills.io)를 참고하세요.
 
+---
+
 ## 예제 출력
 
-### progressive_disclosure_demo.py
+### 1-discovery_skills.py (File-based)
 
 ```
-============================================================
-[PHASE 1] Phase 1: Discovery (Metadata Only)
-============================================================
-
-📂 스캔 중: /path/to/skills
-⏳ metadata만 로드 중 (instructions와 resources 제외)...
-
-✅ 2개 Skill discovery
-
-1. 📦 web-research
-   설명: 웹 검색과 분석을 통해 포괄적인 리서치 수행...
-   📊 예상 토큰: ~95 tokens
-   🔧 허용 도구: WebFetch, Grep
-   📁 경로: /path/to/skills/web-research/SKILL.md
-
-💡 Phase 1 총합: 2개 Skill에 대해 ~190 tokens
-   평균: ~95 tokens/skill
+🚀 Agent Skills - Progressive Disclosure Demo
 
 ============================================================
-[PHASE 2] Phase 2: Activation (Load Instructions)
+Phase 1: Discovery (Metadata Only)
 ============================================================
 
-🎯 Skill activation 중: web-research
-📄 Instructions 로드 중: /path/to/SKILL.md
-⏳ SKILL.md body 읽는 중 (frontmatter 제외)...
+✓ Discovered 2 skills:
 
-✅ Instructions 로드 완료!
-   📊 크기: 4523 characters
-   📊 예상 토큰: ~1130 tokens
-   📊 줄 수: 89
-
-💡 Phase 2: 활성화 시에만 1130 tokens 로드
-   ✓ metadata는 Phase 1에서 이미 로드됨 (재로드 안함)
-   ✓ Resources는 아직 로드 안됨 (Phase 3)
+  📦 web-research
+     Description: 웹 검색과 분석을 통해 포괄적인 리서치 수행
+     Location: /path/to/skills/web-research/SKILL.md
+     Allowed tools: WebFetch, Grep
 
 ============================================================
-[PHASE 3] Phase 3: Resources (Load on Demand)
+Example 2: LLM reads SKILL.md on demand (Phase 2)
 ============================================================
 
-📁 scripts/ 디렉토리 발견:
-
-   📄 scripts/search.py
-      ⏳ 필요시 로드 중...
-      ✅ 로드 완료: 2456 chars, ~614 tokens
-
-💡 Phase 3: 1개 resource 로드
-   총합: ~614 tokens
+Asking: 'How do I use the web-research skill?'
+✓ Agent read the SKILL.md only when needed (true progressive disclosure)
 ```
+
+### 3-skill_agent_tool.py (Meta-Tool / Agent as Tool)
+
+```
+🚀 Agent Skills - Meta-Tool Mode Demo (Agent as Tool)
+
+============================================================
+Creating Skill Agent Tool (Agent as Tool)
+============================================================
+
+🔧 Skill agent tool created: use_skill
+   ✓ Each skill runs in isolated sub-agent (as a tool)
+   ✓ Sub-agent has: file_read, file_write, shell
+   ✓ Complete context separation from main agent
+
+============================================================
+Example: Execute skill in isolated sub-agent (as a tool)
+============================================================
+
+✓ Skill executed in isolated sub-agent (as a tool)
+✓ Sub-agent had its own context with SKILL.md as system prompt
+✓ Main agent received result without seeing internal execution
+```
+
+---
 
 ## 토큰 효율성
 
@@ -259,20 +252,24 @@ Progressive Disclosure는 컨텍스트 사용을 최소화합니다:
 - Phase 3: ~500 tokens (2개 resource 파일)
 - **총합: ~4,500 tokens** (vs Progressive Disclosure 없이 ~50,000 tokens!)
 
+---
+
 ## 고급 사용법
 
-### 커스텀 Tool 통합
+### Meta-Tool Mode 커스텀 설정 (Agent as Tool)
 
 ```python
-from strands import tool
+from agentskills import create_skill_agent_tool
 
-@tool
-def custom_tool():
-    """사용자 정의 tool"""
-    pass
+# Sub-agent에 추가 도구 제공
+skill_agent_tool = create_skill_agent_tool(
+    skills,
+    skills_dir,
+    additional_tools=[file_read, file_write, shell]
+)
 
 agent = Agent(
-    tools=[skill_tool, custom_tool],
+    tools=[skill_agent_tool],  # use_skill만 제공
     ...
 )
 ```
@@ -280,11 +277,14 @@ agent = Agent(
 ### 스킬 resource 접근
 
 ```python
+from agentskills import load_resource
+
 # Agent가 실행 중에 resource 요청 가능
-if "API 문서 로드" in user_request:
-    api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
-    # 컨텍스트에서 api_docs 사용
+api_docs = load_resource(skill.skill_dir, "references/api-docs.md")
+helper = load_resource(skill.skill_dir, "scripts/helper.py")
 ```
+
+---
 
 ## 문제 해결
 
@@ -298,10 +298,12 @@ if "API 문서 로드" in user_request:
 
 **Model 에러:**
 - Bedrock용 AWS 자격증명 확인
-- 또는 다른 모델 사용: `model="anthropic.claude-3-haiku-20240307-v1:0"`
+- 또는 다른 모델 사용: `model="global.anthropic.claude-haiku-4-5-20251001-v1:0"`
+
+---
 
 ## 더 알아보기
 
 - [AgentSkills.io 표준 문서](https://agentskills.io/specification)
-- [Strands SDK 문서](https://docs.strands.so)
-- [메인 README](../README.md)
+- [Strands Agents SDK 문서](https://strandsagents.com)
+- [메인 README](../../README.md)

@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from strands import Agent
 from strands_tools import file_read
 from agentskills import discover_skills, create_skill_tool, generate_skills_prompt
-from strands_logger import StreamingLogger
+from utils.strands_stream import TerminalStreamRenderer
 
 
 def estimate_tokens(text: str) -> int:
@@ -123,6 +123,7 @@ async def main():
         system_prompt=full_prompt,
         tools=[skill_tool, file_read],
         model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        callback_handler=None,  # Disable default callback for custom streaming
     )
 
     print(f"\n✅ 에이전트가 다음으로 생성됨:")
@@ -138,9 +139,9 @@ async def main():
 
     print_section(f"질문 1: {prompt}\n : 이 쿼리는 Phase 1 메타데이터만 사용 (skill 도구 호출 불필요)", "")
     
-    logger = StreamingLogger()
+    renderer = TerminalStreamRenderer()
     async for event in agent.stream_async(prompt):
-        logger.process_event(event)
+        renderer.process(event)
     print()
 
     # ========================================================================
@@ -152,9 +153,9 @@ async def main():
         prompt = f"{skills[0].name} 스킬은 어떻게 사용할 수 있나요?"
         print_section(f"질문 2: {prompt}\n : 이 쿼리는 Phase 2를 트리거함 (skill 도구 호출)", "")
 
-        logger.reset()
+        renderer.reset()
         async for event in agent.stream_async(prompt):
-            logger.process_event(event)
+            renderer.process(event)
         
         print()
 
