@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 import logging
 import os
+from typing import Any
 
 os.environ["BYPASS_TOOL_CONSENT"] = "true"
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,6 +27,7 @@ from agentskills import (
     get_bedrock_agent_model,
 )
 from utils.strands_stream import StreamlitStreamRenderer
+from utils.strands_stream.events import StreamOutput
 
 # 로깅 설정
 logging.basicConfig(
@@ -86,10 +88,15 @@ def create_agent_by_mode(skills, skills_dir, mode: str):
 
     else:  # Meta-Tool Mode
         # Sub-agent를 tool로 사용 - Strands의 "Agents as Tools" 패턴
+        subagent_model = get_bedrock_agent_model(
+            max_tokens=48000,
+            thinking=True
+        )
+
         meta_tool = create_skill_agent_tool(
             skills,
             skills_dir,
-            base_agent_model=agent_model,
+            base_agent_model=subagent_model,
             additional_tools=default_tools
         )
 
@@ -103,11 +110,79 @@ def create_agent_by_mode(skills, skills_dir, mode: str):
         return agent
 
 
-async def streaming_generator(agent_stream):
-    """스트리밍 이벤트를 처리하고 텍스트와 tool 호출 정보를 yield
+class StreamlitContainerManager:
+    """Manage dynamic containers and expanders for different agent sources
     
-    StreamlitStreamRenderer를 사용하여 이벤트를 처리합니다.
-    Strands SDK의 tool_stream_event 패턴을 사용하여 Sub-agent 이벤트를 처리합니다.
+    Uses hybrid rendering:
+    - Main agent: Inline sections (new placeholder each time after sub-agent)
+    - Sub-agents: Grouped by source (same sub-agent always uses same expander)
+    """
+    
+    def __init__(self):
+        self.sections = []  # List of all sections in order of appearance
+        self.current_source: str | None = None  # Track current source
+        self.current_section: dict | None = None  # Current active section
+        self.subagent_sections: dict[str, dict] = {}  # Track sub-agent sections by source
+    
+    def append_content(self, source: str | None, content: str):
+        """Append content to a section
+        
+        - Main agent (source=None): New section each time after sub-agent
+        - Sub-agent: Reuse existing expander for same source, or create new one
+        """
+        if source is None:
+            # Main agent - inline flow
+            # Create new section if: first time, or current section is sub-agent
+            if self.current_section is None or self.current_source != source:
+                self.current_source = source
+                placeholder = st.empty()
+                self.current_section = {
+                    "placeholder": placeholder,
+                    "content": "",
+                    "is_expander": False,
+                    "source": None
+                }
+                self.sections.append(self.current_section)
+                logger.debug("New main agent section created")
+            
+            # Append to current main agent section
+            self.current_section["content"] += content
+            if self.current_section["placeholder"]:
+                self.current_section["placeholder"].markdown(self.current_section["content"])
+        else:
+            # Sub-agent - group by source
+            self.current_source = source
+            
+            if source in self.subagent_sections:
+                # Reuse existing expander for this sub-agent
+                section = self.subagent_sections[source]
+                section["content"] += content
+                if section["placeholder"]:
+                    section["placeholder"].markdown(section["content"])
+                self.current_section = section
+            else:
+                # Create new expander for this sub-agent
+                with st.expander(f"⚡ Sub-Agent: **{source}**", expanded=True):
+                    placeholder = st.empty()
+                    section = {
+                        "placeholder": placeholder,
+                        "content": content,
+                        "is_expander": True,
+                        "source": source
+                    }
+                    placeholder.markdown(content)
+                
+                self.subagent_sections[source] = section
+                self.sections.append(section)
+                self.current_section = section
+                logger.debug(f"New sub-agent section created for: {source}")
+
+
+async def render_agent_stream(agent_stream, container_manager: StreamlitContainerManager):
+    """Render agent stream with source-based container management
+    
+    StreamlitStreamRenderer를 사용하여 이벤트를 처리하고,
+    source별로 실시간 스트리밍으로 렌더링합니다.
     """
     renderer = StreamlitStreamRenderer()
 
@@ -117,14 +192,24 @@ async def streaming_generator(agent_stream):
                 # Process event through renderer
                 results = renderer.process(event)
                 for result in results:
-                    if result:  # Only yield non-empty strings
-                        yield result
+                    # Handle StreamOutput objects
+                    if isinstance(result, StreamOutput):
+                        if result.content:
+                            source_label = result.source or "main agent"
+                            logger.debug(f"Rendering content for {source_label}: {len(result.content)} chars")
+                            container_manager.append_content(result.source, result.content)
+                    # Handle legacy string outputs (for backward compatibility)
+                    elif isinstance(result, str) and result:
+                        # If we get a string, assume it's for main agent
+                        logger.debug(f"Rendering legacy string for main agent: {len(result)} chars")
+                        container_manager.append_content(None, result)
 
         logger.info("✅ Agent 실행 완료")
 
     except Exception as e:
         logger.error(f"스트리밍 오류: {str(e)}")
-        yield f"\n\n❌ 오류 발생: {str(e)}\n"
+        error_msg = f"\n\n❌ 오류 발생: {str(e)}\n"
+        container_manager.append_content(None, error_msg)
         raise
 
 
@@ -132,6 +217,21 @@ async def streaming_generator(agent_stream):
 st.title("🤖 Strands AgentSkills")
 st.subheader("🔍 Streamlit Integration Demo")
 st.markdown("""> 세 가지 Agent Skills 실행 모드를 비교하고, 실제 에이전트의 SKILLS 호출 동작을 시각적으로 확인할 수 있습니다.""")
+st.markdown(
+    """
+    <style>
+    code {
+        white-space : pre-wrap !important;
+        word-break: break-word !important;
+    }
+    pre {
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Session state 초기화
 init_session_state()
@@ -217,11 +317,12 @@ else:
     # 질의 입력
     st.header("💬 Agent 질의 실행")
 
-    query = st.text_input(
+    query = st.text_area(
         "질의 입력:",
-        "sales_data 파일을 분석하고, 시각화 이미지를 첨부하여 pptx 파일로 만들어주세요",
-        placeholder="Agent에게 질의를 입력하세요",        
+        "sales_data 파일을 분석하고, 모든 시각화 이미지를 첨부하여 pptx 파일로 만들어주세요. 동시에 인사이트 분석 보고서를 docs로 작성하세요.",
+        placeholder="Agent에게 질의를 입력하세요",
         key="query_input",
+        height="content"
     )
 
     run_button = st.button("🚀 실행", use_container_width=True, type="primary")
@@ -237,9 +338,38 @@ else:
             if hasattr(st.session_state.agent, "stream_async"):
                 logger.info(f"🚀 Agent 실행 시작 [{st.session_state.mode}]: {query}")
                 
+                # Create container manager for source-based rendering
+                container_manager = StreamlitContainerManager()
+                
                 # Strands SDK의 tool_stream_event 패턴으로 Sub-agent 스트리밍 처리
                 agent_stream = st.session_state.agent.stream_async(query)
-                st.write_stream(streaming_generator(agent_stream))
+                
+                # Render with async support
+                # Streamlit typically doesn't run in an async context, so asyncio.run() should work
+                # If there's an existing event loop, we'll handle it gracefully
+                import asyncio
+                try:
+                    # Try to get running loop
+                    loop = asyncio.get_running_loop()
+                    # If we're here, there's a running loop - we can't use asyncio.run()
+                    # Instead, we'll need to schedule the coroutine
+                    import concurrent.futures
+                    import threading
+                    
+                    def run_in_thread():
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            new_loop.run_until_complete(render_agent_stream(agent_stream, container_manager))
+                        finally:
+                            new_loop.close()
+                    
+                    thread = threading.Thread(target=run_in_thread)
+                    thread.start()
+                    thread.join()
+                except RuntimeError:
+                    # No event loop running, safe to use asyncio.run()
+                    asyncio.run(render_agent_stream(agent_stream, container_manager))
             else:
                 st.error("스트리밍이 지원되지 않는 Agent입니다.")
 

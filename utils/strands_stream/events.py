@@ -142,3 +142,11 @@ class MultiAgentResultEvent(BaseEvent):
     def event_type(self) -> str:
         return "multiagent_result"
 
+
+@dataclass
+class StreamOutput:
+    """Structured output from renderer with source tracking"""
+    content: str
+    source: str | None = None  # None for main agent
+    event_type: str = "content"  # content, tool_start, tool_result, etc.
+
