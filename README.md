@@ -1,3 +1,5 @@
+> **⚠️ This repository has been archived.** The official version is now maintained at [aws-samples/sample-strands-agents-agentskills](https://github.com/aws-samples/sample-strands-agents-agentskills).
+
 # Agent Skills for Strands Agents SDK
 
 **[English](README_en.md) | 한국어**
