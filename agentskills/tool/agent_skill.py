@@ -3,7 +3,7 @@
 This module creates a Strands tool that executes skills in isolated sub-agents.
 Each skill runs in a separate agent with its own context and system prompt.
 
-For inline mode (instructions loaded into main agent), see tool.py
+For inline mode (instructions loaded into main agent), see skill.py
 """
 
 import logging
@@ -13,10 +13,11 @@ from typing import List, Optional, Any, AsyncIterator
 from strands import tool, Agent
 from strands.models import Model
 
-from .models import SkillProperties
-from .errors import SkillNotFoundError, SkillActivationError
-from .parser import load_instructions
-from .agent_model import get_bedrock_agent_model
+from ..models import SkillProperties
+from ..errors import SkillActivationError
+from ..parser import load_instructions
+from ..agent_model import get_bedrock_agent_model
+from ..tool_utils import validate_skill_name, build_skill_header
 
 logger = logging.getLogger(__name__)
 
@@ -97,14 +98,7 @@ def create_skill_agent_tool(
             use_skill(skill_name="web-research", request="Research quantum computing trends")
         """
         # Validate skill exists
-        if skill_name not in skill_map:
-            available = ", ".join(skill_map.keys())
-            raise SkillNotFoundError(
-                f"Skill '{skill_name}' not found. "
-                f"Available skills: {available}"
-            )
-
-        skill = skill_map[skill_name]
+        skill = validate_skill_name(skill_name, skill_map)
 
         try:
             logger.info(f"Streaming skill '{skill_name}' execution in sub-agent")
@@ -205,36 +199,7 @@ def _build_system_prompt(skill: SkillProperties, instructions: str) -> str:
     Returns:
         Complete system prompt
     """
-    # Build header with skill context
-    header = f"""# Skill: {skill.name}
-
-**Description:** {skill.description}
-
-**Skill Directory:** `{skill.skill_dir}/`
-"""
-
-    # Add allowed-tools reminder if specified
-    if skill.allowed_tools:
-        header += f"\n**IMPORTANT:** Only use these tools: `{skill.allowed_tools}`\n"
-
-    # Scan and list available resources
-    skill_dir = Path(skill.skill_dir)
-    resources = []
-    for subdir in ["scripts", "references", "assets"]:
-        resource_dir = skill_dir / subdir
-        if resource_dir.exists() and resource_dir.is_dir():
-            for file_path in sorted(resource_dir.rglob("*")):
-                if file_path.is_file():
-                    resources.append(str(file_path.absolute()))
-
-    if resources:
-        header += "\n**Available Resources:**\n"
-        for resource in resources:
-            header += f"- `{resource}`\n"
-
-    header += "\n---\n\n"
-
-    # Return complete system prompt
+    header = build_skill_header(skill, include_resources=True)
     return header + instructions
 
 

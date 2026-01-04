@@ -3,7 +3,7 @@
 This module creates a Strands tool for progressive disclosure of skills.
 The skill tool loads instructions into the main agent's context.
 
-For Agent as Tool pattern (isolated sub-agents), see agent_tool.py
+For Agent as Tool pattern (isolated sub-agents), see agent_skill.py
 """
 
 import logging
@@ -12,8 +12,9 @@ from typing import List
 
 from strands import tool
 
-from .models import SkillProperties
-from .errors import SkillNotFoundError, SkillActivationError
+from ..models import SkillProperties
+from ..errors import SkillActivationError
+from ..tool_utils import validate_skill_name
 
 logger = logging.getLogger(__name__)
 
@@ -64,55 +65,15 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
             skill(skill_name="web-research")
         """
         # Validate skill exists
-        if skill_name not in skill_map:
-            available = ", ".join(skill_map.keys())
-            raise SkillNotFoundError(
-                f"Skill '{skill_name}' not found. "
-                f"Available skills: {available}"
-            )
-
-        skill_props = skill_map[skill_name]
+        skill_props = validate_skill_name(skill_name, skill_map)
 
         try:
             # Phase 2: Load instructions only (not frontmatter)
-            from .parser import load_instructions
+            from ..parser import load_instructions
 
             instructions = load_instructions(skill_props.path)
             logger.info(f"Loaded skill: {skill_name}")
 
-            # Build response with header and instructions
-            header = (
-                f"# Skill: {skill_props.name}\n\n"
-                f"**Description:** {skill_props.description}\n\n"
-                f"**Skill Directory:** `{skill_props.skill_dir}/`\n\n"
-            )
-
-            # Add allowed-tools reminder if specified
-            if skill_props.allowed_tools:
-                header += (
-                    f"**IMPORTANT:** Only use these tools: `{skill_props.allowed_tools}`\n\n"
-                )
-
-            # Scan and list available resources
-            skill_dir = Path(skill_props.skill_dir)
-            resources = []
-            for subdir in ["scripts", "references", "assets"]:
-                resource_dir = skill_dir / subdir
-                if resource_dir.exists() and resource_dir.is_dir():
-                    for file_path in sorted(resource_dir.rglob("*")):
-                        if file_path.is_file():
-                            resources.append(str(file_path.absolute()))
-
-            if resources:
-                header += "**Available Resources:**\n"
-                for resource in resources:
-                    header += f"- `{resource}`\n"
-                header += "\n"
-
-            header += "---\n\n"
-            header += "# Instructions\n\n"
-
-            # return header + instructions
             return instructions
 
         except Exception as e:
@@ -125,3 +86,4 @@ def create_skill_tool(skills: List[SkillProperties], skills_dir: str | Path):
 
 
 __all__ = ["create_skill_tool"]
+

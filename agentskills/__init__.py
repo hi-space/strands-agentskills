@@ -14,7 +14,7 @@ Core Components:
     - validator: Validation against AgentSkills.io spec
     - discovery: Skill directory scanning
     - tool: Inline skill tool (loads instructions into main agent context)
-    - agent_tool: Agent as Tool pattern (isolated sub-agent execution)
+    - tool.agent_skill: Agent as Tool pattern (isolated sub-agent execution)
     - prompt: System prompt generation
     - errors: Exception hierarchy
 """
@@ -46,7 +46,7 @@ from .prompt import generate_skills_prompt
 from .tool import create_skill_tool
 
 # Agent Tool (Agent as Tool Mode)
-from .agent_tool import create_skill_agent_tool
+from .tool import create_skill_agent_tool
 
 # Errors
 from .errors import (
