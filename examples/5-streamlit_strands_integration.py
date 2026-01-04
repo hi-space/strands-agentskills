@@ -16,12 +16,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
 from strands import Agent
-from strands_tools import file_read, file_write, shell
+from strands.models import BedrockModel
+from strands_tools import file_read, file_write, shell, editor
 from agentskills import (
     discover_skills,
     generate_skills_prompt,
     create_skill_tool,
     create_skill_agent_tool,
+    get_bedrock_agent_model,
 )
 from utils.strands_stream import StreamlitStreamRenderer
 
@@ -59,21 +61,15 @@ def create_agent_by_mode(skills, skills_dir, mode: str):
     """선택된 모드에 따라 Agent 생성"""
     base_prompt = "You are a helpful AI assistant with access to specialized skills."
     skills_prompt = generate_skills_prompt(skills)
+    full_prompt = base_prompt + "\n\n" + skills_prompt
+
+    agent_model = get_bedrock_agent_model(thinking=True)
 
     if mode == "File-based Mode":
-        full_prompt = f"""{base_prompt}
-
-When a user's request matches one of the available skills, use the file_read tool to:
-1. Read the SKILL.md file at the path shown in the skill list
-2. Follow the instructions in that file
-3. Read any additional resource files if needed
-
-{skills_prompt}"""
-
         agent = Agent(
             system_prompt=full_prompt,
-            tools=[file_read, file_write, shell],
-            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            tools=[file_read, file_write, shell, editor],
+            model=agent_model,
             callback_handler=None,  # Disable default callback for streaming
         )
         return agent
@@ -81,19 +77,10 @@ When a user's request matches one of the available skills, use the file_read too
     elif mode == "Tool-based Mode":
         skill_tool = create_skill_tool(skills, skills_dir)
 
-        full_prompt = f"""{base_prompt}
-
-When a user's request matches one of the available skills, use the skill tool to:
-1. Load the skill's instructions: skill(skill_name="skill-name")
-2. Follow the instructions provided
-3. Use file_read for any additional resource files if needed
-
-{skills_prompt}"""
-
         agent = Agent(
             system_prompt=full_prompt,
-            tools=[skill_tool, file_read, file_write, shell],
-            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            tools=[skill_tool, file_read, file_write, shell, editor],
+            model=agent_model,
             callback_handler=None,
         )
         return agent
@@ -103,23 +90,14 @@ When a user's request matches one of the available skills, use the skill tool to
         meta_tool = create_skill_agent_tool(
             skills,
             skills_dir,
-            additional_tools=[file_read, file_write, shell]
+            base_agent_model=agent_model,
+            additional_tools=[file_read, file_write, shell, editor]
         )
-
-        full_prompt = f"""{base_prompt}
-
-When a user's request matches one of the available skills, use the use_skill tool:
-- use_skill(skill_name="skill-name", request="specific request")
-
-Each skill runs in an isolated sub-agent (as a tool) with its own context and instructions.
-The sub-agent's tool calls and responses will be streamed in real-time.
-
-{skills_prompt}"""
 
         agent = Agent(
             system_prompt=full_prompt,
             tools=[meta_tool],
-            model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            model=agent_model,
             callback_handler=None,  # Disable default callback for custom streaming
         )
         
@@ -242,7 +220,7 @@ else:
 
     query = st.text_input(
         "질의 입력:",
-        "sales_data 파일을 분석해서 result.txt 파일에 써주세요",
+        "sales_data 파일을 분석하고 pptx 파일로 만들어주세요",
         placeholder="Agent에게 질의를 입력하세요",        
         key="query_input",
     )

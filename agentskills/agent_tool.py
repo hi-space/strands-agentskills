@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import List, Optional, Any, AsyncIterator
 
 from strands import tool, Agent
+from strands.models import Model
 
 from .models import SkillProperties
 from .errors import SkillNotFoundError, SkillActivationError
 from .parser import load_instructions
+from .agent_model import get_bedrock_agent_model
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 def create_skill_agent_tool(
     skills: List[SkillProperties],
     skills_dir: str | Path,
-    base_agent_model: Optional[str] = None,
+    base_agent_model: Optional[Model] = None,
     additional_tools: Optional[List[Any]] = None
 ):
     """Create a Strands tool that uses sub-agent for skill execution (Agent as Tool pattern)
@@ -70,7 +72,7 @@ def create_skill_agent_tool(
     skill_map = {skill.name: skill for skill in skills}
 
     # Default model
-    model = base_agent_model or "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    model = base_agent_model or get_bedrock_agent_model(thinking=True)
 
     @tool
     async def use_skill(skill_name: str, request: str) -> AsyncIterator:
@@ -149,7 +151,7 @@ def create_skill_agent_tool(
 def _create_skill_agent(
     skill: SkillProperties,
     instructions: str,
-    model: str,
+    model: Model,
     additional_tools: Optional[List[Any]] = None
 ) -> Agent:
     """Create a sub-agent configured for a specific skill

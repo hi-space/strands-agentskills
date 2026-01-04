@@ -36,6 +36,9 @@ from .validator import validate, validate_metadata
 # Discovery
 from .discovery import discover_skills
 
+# Agent Model
+from .agent_model import get_bedrock_agent_model
+
 # Prompt generation
 from .prompt import generate_skills_prompt
 
@@ -69,6 +72,8 @@ __all__ = [
     "validate_metadata",
     # Discovery
     "discover_skills",
+    # Agent Model
+    "get_bedrock_agent_model",
     # Prompt
     "generate_skills_prompt",
     # Tool (Inline Mode)

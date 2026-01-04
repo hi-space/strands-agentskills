@@ -19,6 +19,7 @@ from agentskills import (
     generate_skills_prompt,
     create_skill_tool,
     create_skill_agent_tool,
+    get_bedrock_agent_model,
 )
 
 
@@ -71,10 +72,11 @@ This gives you the most flexibility to use skills naturally."""
     print("  - Skill metadata (names, descriptions, paths)")
     print("  - Instructions to read SKILL.md files as needed")
     
+    agent_model = get_bedrock_agent_model(thinking=True)
     agent = Agent(
         system_prompt=full_prompt,
         tools=[file_read, file_write, shell],
-        model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model=agent_model,
         callback_handler=None,
     )
 
@@ -114,10 +116,11 @@ The skill tool provides a structured way to activate skills."""
     print("  - Skill metadata (names, descriptions)")
     print("  - Instructions to use skill tool")
 
+    agent_model = get_bedrock_agent_model(thinking=True)
     agent = Agent(
         system_prompt=full_prompt,
         tools=[skill_tool, file_read, file_write, shell],
-        model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model=agent_model,
         callback_handler=None,
     )
 
@@ -166,10 +169,11 @@ After the skill completes, you'll receive the result and can present it to the u
     print("\n🤖 Sub-agents have access to:")
     print("  - file_read, file_write, shell, web_search")
 
+    agent_model = get_bedrock_agent_model(thinking=True)
     agent = Agent(
         system_prompt=full_prompt,
         tools=[skill_agent_tool],
-        model="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model=agent_model,
         callback_handler=None,
     )
 

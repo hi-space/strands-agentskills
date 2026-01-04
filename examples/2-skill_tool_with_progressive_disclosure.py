@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from strands import Agent
 from strands_tools import file_read
-from agentskills import discover_skills, create_skill_tool, generate_skills_prompt
+from agentskills import discover_skills, create_skill_tool, generate_skills_prompt, get_bedrock_agent_model
 from utils.strands_stream import TerminalStreamRenderer
 
 
@@ -119,10 +119,11 @@ async def main():
     print(f"   ✓ 지시사항이 필요할 때 LLM이 호출할 수 있음")
     print(f"   ✓ LLM이 skill(skill_name=...)을 호출하면 Phase 2가 트리거됨")
 
+    agent_model = get_bedrock_agent_model(thinking=True)
     agent = Agent(
         system_prompt=full_prompt,
         tools=[skill_tool, file_read],
-        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        model=agent_model,
         callback_handler=None,  # Disable default callback for custom streaming
     )
 

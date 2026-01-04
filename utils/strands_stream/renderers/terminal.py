@@ -49,6 +49,7 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         self.use_colors = use_colors and COLORAMA_AVAILABLE
         self.displayed_tool_calls = {}  # Map tool_id -> tool_call_number (to track which tool calls we've seen)
         self.current_text_source: str | None | object = None  # Track current text source to show prefix only on change
+        self.current_reasoning_active: bool = False  # Track if reasoning is currently active to show different color only on start
     
     def _colorize(self, text: str, *colors) -> str:
         """Apply color/style to text if colors are enabled
@@ -71,6 +72,11 @@ class TerminalStreamRenderer(BaseStreamRenderer):
     
     def on_text(self, event: TextEvent) -> None:
         """Print text chunk"""
+        # If reasoning was active, add newlines before text
+        if self.current_reasoning_active:
+            print("\n\n", end="", flush=True)
+        # Reset reasoning state when text event occurs
+        self.current_reasoning_active = False
         # Add source prefix only when source changes (not on every token)
         previous_source = self.current_text_source
         if event.source != previous_source:
@@ -93,6 +99,11 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         """Print tool call with formatting - shows accumulated input as it streams"""
         # Reset text source so next text event will show header again
         self.current_text_source = self._TEXT_SOURCE_RESET
+        # If reasoning was active, add newlines before tool use
+        if self.current_reasoning_active:
+            print("\n\n", end="", flush=True)
+        # Reset reasoning state when tool use occurs
+        self.current_reasoning_active = False
         
         tool_key = event.tool_id or event.tool_name
         is_new_tool_call = tool_key and tool_key not in self.displayed_tool_calls
@@ -122,6 +133,11 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         """Print tool result with formatting"""
         # Reset text source so next text event will show header again
         self.current_text_source = self._TEXT_SOURCE_RESET
+        # If reasoning was active, add newlines before tool result
+        if self.current_reasoning_active:
+            print("\n\n", end="", flush=True)
+        # Reset reasoning state when tool result occurs
+        self.current_reasoning_active = False
         
         separator = "─" * 60
         print(separator)
@@ -151,6 +167,11 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         """Print tool stream event"""
         # Reset text source so next text event will show header again
         self.current_text_source = self._TEXT_SOURCE_RESET
+        # If reasoning was active, add newlines before tool stream
+        if self.current_reasoning_active:
+            print("\n\n", end="", flush=True)
+        # Reset reasoning state when tool stream occurs
+        self.current_reasoning_active = False
         
         tool_use_dict = event.tool_use if isinstance(event.tool_use, dict) else {}
         tool_name = tool_use_dict.get("name", "unknown")
@@ -178,8 +199,12 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         return None
     
     def on_reasoning(self, event: ReasoningEvent) -> None:
-        """Print reasoning text (cyan color if supported)"""
-        print(self._colorize(event.data, Fore.CYAN), end="", flush=True)
+        """Print reasoning text with different color on start (only on first chunk to avoid inserting chars between tokens)"""
+        if not self.current_reasoning_active:
+            self.current_reasoning_active = True
+            print(self._colorize(f"💭 {event.data}", Fore.MAGENTA), end="", flush=True)
+        else:
+            print(self._colorize(event.data, Fore.MAGENTA), end="", flush=True)
         return None
     
     def on_lifecycle(self, event: LifecycleEvent) -> None:
@@ -243,6 +268,7 @@ class TerminalStreamRenderer(BaseStreamRenderer):
         self.tool_call_counter = 0
         self.displayed_tool_calls.clear()
         self.current_text_source = None
+        self.current_reasoning_active = False
 
 
 # Backward compatibility alias

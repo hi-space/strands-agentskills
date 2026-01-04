@@ -29,6 +29,7 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
         super().__init__(parser)
         self.displayed_tool_calls = set()
         self.current_text_source: str | None | object = None  # Track current text source to show prefix only on change
+        self.current_reasoning_active: bool = False  # Track if reasoning is currently active to show prefix only on start
     
     def format_tool_display(self, tool_name: str, tool_input: dict | None) -> str:
         """Format tool name and arguments for display"""
@@ -46,6 +47,8 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
     
     def on_text(self, event: TextEvent) -> str:
         """Return text chunk as-is"""
+        # Reset reasoning state when text event occurs
+        self.current_reasoning_active = False
         # Add source prefix only when source changes (not on every token)
         if event.source != self.current_text_source:
             self.current_text_source = event.source
@@ -60,6 +63,8 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
         """Return tool call as markdown - shows accumulated input as it streams"""
         # Reset text source so next text event will show header again
         self.current_text_source = self._TEXT_SOURCE_RESET
+        # Reset reasoning state when tool use occurs
+        self.current_reasoning_active = False
         
         # Use tool_id for deduplication if available, otherwise use tool_name
         dedup_key = event.tool_id or event.tool_name
@@ -88,6 +93,8 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
         """Return tool result as markdown"""
         # Reset text source so next text event will show header again
         self.current_text_source = self._TEXT_SOURCE_RESET
+        # Reset reasoning state when tool result occurs
+        self.current_reasoning_active = False
         
         if not event.data:
             return ""
@@ -107,6 +114,8 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
         """Return tool stream event as markdown"""
         # Reset text source so next text event will show header again
         self.current_text_source = self._TEXT_SOURCE_RESET
+        # Reset reasoning state when tool stream occurs
+        self.current_reasoning_active = False
         
         tool_use_dict = event.tool_use if isinstance(event.tool_use, dict) else {}
         tool_name = tool_use_dict.get("name", "unknown")
@@ -135,8 +144,15 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
         return result
     
     def on_reasoning(self, event: ReasoningEvent) -> str:
-        """Return reasoning text"""
-        return event.data
+        """Return reasoning text with > prefix (blockquote style)"""
+        # Replace newlines with newline + > to maintain blockquote across multiple lines
+        text = event.data.replace("\n", "\n> ")
+        
+        # Add > prefix and 💭 emoji only when reasoning starts (not on every token)
+        if not self.current_reasoning_active:
+            self.current_reasoning_active = True
+            return f"> 💭 {text}"
+        return text
     
     def on_lifecycle(self, event: LifecycleEvent) -> str:
         """Return lifecycle event as markdown"""
@@ -191,6 +207,7 @@ class StreamlitStreamRenderer(BaseStreamRenderer):
         super().reset()
         self.displayed_tool_calls.clear()
         self.current_text_source = None
+        self.current_reasoning_active = False
 
 
 # Backward compatibility alias

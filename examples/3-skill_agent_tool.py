@@ -22,6 +22,7 @@ from agentskills import (
     discover_skills,
     generate_skills_prompt,
     create_skill_agent_tool,
+    get_bedrock_agent_model,
 )
 from utils.strands_stream import TerminalStreamRenderer
 
@@ -103,10 +104,11 @@ After the skill completes, you'll receive the result and can present it to the u
     # ========================================================================
     # Create agent
     # ========================================================================
+    agent_model = get_bedrock_agent_model(thinking=True)
     agent = Agent(
         system_prompt=full_prompt,
         tools=[skill_agent_tool],  # Only use_skill tool - isolation!
-        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        model=agent_model,
         callback_handler=None,
     )
 
