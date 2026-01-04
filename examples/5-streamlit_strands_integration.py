@@ -217,21 +217,6 @@ async def render_agent_stream(agent_stream, container_manager: StreamlitContaine
 st.title("🤖 Strands AgentSkills")
 st.subheader("🔍 Streamlit Integration Demo")
 st.markdown("""> 세 가지 Agent Skills 실행 모드를 비교하고, 실제 에이전트의 SKILLS 호출 동작을 시각적으로 확인할 수 있습니다.""")
-st.markdown(
-    """
-    <style>
-    code {
-        white-space : pre-wrap !important;
-        word-break: break-word !important;
-    }
-    pre {
-        white-space: pre-wrap !important;
-        word-wrap: break-word !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # Session state 초기화
 init_session_state()
@@ -344,32 +329,16 @@ else:
                 # Strands SDK의 tool_stream_event 패턴으로 Sub-agent 스트리밍 처리
                 agent_stream = st.session_state.agent.stream_async(query)
                 
-                # Render with async support
-                # Streamlit typically doesn't run in an async context, so asyncio.run() should work
-                # If there's an existing event loop, we'll handle it gracefully
+                # Streamlit은 동기적으로 실행되므로 asyncio.run() 사용
+                # 이미 실행 중인 event loop가 있을 경우 nest_asyncio로 해결
                 import asyncio
                 try:
-                    # Try to get running loop
-                    loop = asyncio.get_running_loop()
-                    # If we're here, there's a running loop - we can't use asyncio.run()
-                    # Instead, we'll need to schedule the coroutine
-                    import concurrent.futures
-                    import threading
-                    
-                    def run_in_thread():
-                        new_loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(new_loop)
-                        try:
-                            new_loop.run_until_complete(render_agent_stream(agent_stream, container_manager))
-                        finally:
-                            new_loop.close()
-                    
-                    thread = threading.Thread(target=run_in_thread)
-                    thread.start()
-                    thread.join()
-                except RuntimeError:
-                    # No event loop running, safe to use asyncio.run()
-                    asyncio.run(render_agent_stream(agent_stream, container_manager))
+                    import nest_asyncio
+                    nest_asyncio.apply()
+                except ImportError:
+                    pass  # nest_asyncio가 없어도 대부분의 경우 동작함
+                
+                asyncio.run(render_agent_stream(agent_stream, container_manager))
             else:
                 st.error("스트리밍이 지원되지 않는 Agent입니다.")
 

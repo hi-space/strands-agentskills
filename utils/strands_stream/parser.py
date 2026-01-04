@@ -173,12 +173,7 @@ class StrandsEventParser:
             return []
         
         parsed_events: list[BaseEvent] = []
-        
-        # Debug: print raw event if debug mode
-        if debug and "data" in event:
-            import json
-            print(f"\n[DEBUG] Event with data: {json.dumps(event, indent=2, ensure_ascii=False, default=str)[:500]}")
-        
+                
         # Check for multi-agent events first (by type field)
         event_type = event.get("type")
         if event_type:
@@ -298,8 +293,7 @@ class StrandsEventParser:
         # Main agent text data
         # Note: Don't deduplicate text events by event_loop_cycle_id alone
         # because multiple text chunks can share the same cycle id during streaming
-        # Skip main agent text if sub-agent is active (SDK sends duplicate events)
-        if "data" in event and not self.active_subagent_tools:
+        if "data" in event:
             chunk_text = event["data"]
             if chunk_text:
                 parsed_events.append(TextEvent(data=chunk_text, source=None))
