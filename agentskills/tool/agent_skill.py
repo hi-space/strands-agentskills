@@ -17,7 +17,8 @@ from ..models import SkillProperties
 from ..errors import SkillActivationError
 from ..parser import load_instructions
 from ..agent_model import get_bedrock_agent_model
-from ..tool_utils import validate_skill_name, build_skill_header
+from ..tool_utils import validate_skill_name
+from ..prompt import generate_skill_instructions_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -46,26 +47,6 @@ def create_skill_agent_tool(
 
     Returns:
         A Strands tool function decorated with @tool
-
-    Example:
-        >>> from agentskills import discover_skills, create_skill_agent_tool
-        >>> from strands import Agent
-        >>> from strands_tools import web_search
-        >>>
-        >>> skills = discover_skills("./skills")
-        >>> skill_tool = create_skill_agent_tool(
-        ...     skills,
-        ...     "./skills",
-        ...     additional_tools=[web_search]
-        ... )
-        >>>
-        >>> # Process sub-agent events via tool_stream_event
-        >>> agent = Agent(tools=[skill_tool], callback_handler=None)
-        >>> async for event in agent.stream_async("Use web-research skill"):
-        ...     if tool_stream := event.get("tool_stream_event"):
-        ...         data = tool_stream.get("data", {})
-        ...         if isinstance(data, dict) and "event" in data:
-        ...             print(f"Sub-agent: {data['skill_name']}")
     """
     skills_dir = Path(skills_dir).expanduser().resolve()
 
@@ -162,17 +143,12 @@ def _create_skill_agent(
     skill_name = skill.name
 
     # Build system prompt with skill context
-    system_prompt = _build_system_prompt(skill, instructions)
-
+    system_prompt = generate_skill_instructions_prompt(instructions)
+    
     # Determine which tools to provide
     tools = []
     if additional_tools:
         tools.extend(additional_tools)
-
-    logger.debug(
-        f"Creating sub-agent for skill '{skill_name}': "
-        f"model={model}, tools={len(tools)}"
-    )
 
     # Create sub-agent
     agent = Agent(
@@ -184,23 +160,6 @@ def _create_skill_agent(
     )
 
     return agent
-
-
-def _build_system_prompt(skill: SkillProperties, instructions: str) -> str:
-    """Build system prompt for the sub-agent
-
-    Combines skill metadata with instructions to create
-    a complete system prompt for the skill agent.
-
-    Args:
-        skill: The skill's properties
-        instructions: Full skill instructions
-
-    Returns:
-        Complete system prompt
-    """
-    header = build_skill_header(skill, include_resources=True)
-    return header + instructions
 
 
 __all__ = ["create_skill_agent_tool"]

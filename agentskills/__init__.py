@@ -40,7 +40,7 @@ from .discovery import discover_skills
 from .agent_model import get_bedrock_agent_model
 
 # Prompt generation
-from .prompt import generate_skills_prompt
+from .prompt import generate_skills_prompt, generate_default_system_prompt, generate_skill_instructions_prompt
 
 # Tool (Inline Mode)
 from .tool import create_skill_tool
@@ -76,6 +76,8 @@ __all__ = [
     "get_bedrock_agent_model",
     # Prompt
     "generate_skills_prompt",
+    "generate_default_system_prompt",
+    "generate_skill_instructions_prompt",
     # Tool (Inline Mode)
     "create_skill_tool",
     # Agent Tool (Agent as Tool Mode)

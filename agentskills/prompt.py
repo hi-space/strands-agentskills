@@ -3,11 +3,40 @@
 This module provides XML-formatted prompt generation following the AgentSkills.io specification.
 """
 
+from pathlib import Path
 from typing import List
 from .models import SkillProperties
 
+# Directory paths for agent file operations
+ROOT_DIR = Path(__file__).parent.parent  # Project root
+SCRATCH_DIR = ROOT_DIR / "_scratch"
+OUTPUT_DIR = ROOT_DIR / "_output"
+
+# Ensure directories exist
+SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+DEFAULT_SYSTEM_PROMPT = """
+You are a helpful AI assistant. You have access to a skills library that provides specialized capabilities and domain knowledge.
+
+## Tool usage policy
+
+- Use specialized tools instead of bash commands when possible, as this provides a better user experience. Reserve bash tools exclusively for actual system commands and terminal operations that require shell execution. 
+- After completing a task that involves tool use, provide a quick summary of the work you've done.
+- If you create any temporary new files, scripts, or helper files for iteration, clean up these files by removing them at the end of the task.
+
+<file_operations_policy>
+- **Root directory**: `{root_dir}` - All operations must stay within this boundary
+- **Scratch directory**: `{root_dir}/_scratch` - Use for ALL temporary/intermediate files
+- **Output directory**: `{root_dir}/_output` - Final deliverables go here
+- **[IMPORTANT]**: Never use absolute paths like `/home`, `/tmp`, `/etc`, or `~` that fall outside the root boundary. 
+</file_operations_policy>
+"""
 
 SKILLS_SYSTEM_PROMPT = """
+{default_system_prompt}
+
 ## Skills System
 
 You have access to a skills library that provides specialized capabilities and domain knowledge.
@@ -15,11 +44,17 @@ You have access to a skills library that provides specialized capabilities and d
 <skills_instructions>
 **How to Use Skills:**
 
+Your efforts are greatly aided by reading the skill documentation BEFORE writing any code, creating any files, or using any computer tools.
 Skills follow a **progressive disclosure** pattern - you know they exist (name + description above), but you only read the full instructions when needed:
+
 1. **Recognize when a skill applies**: Check if the user's task matches any skill's description
 2. **Read the skill's full instructions**: 
-   - **Preferred**: If a `skill` tool is available, call it with the skill name (e.g., `skill(skill_name="web-research")`)
-   - **Alternative**: Use the absolute path shown above to read SKILL.md directly
+   - If a `skill` tool is available, call it with the skill name
+     - `skill(skill_name="web-research")` - invoke the web-research skill
+   - When a user's request matches one of the available skills, use the use_skill tool
+     - `use_skill(skill_name="skill-name", request="specific request")`
+   - Alternative: Use the absolute path shown above to read SKILL.md directly
+   - Only use skills listed in <available_skills> below
 3. **Follow the skill's instructions**: SKILL.md contains step-by-step workflows, best practices, and examples
 4. **Access supporting files**: Skills may include Python scripts, configs, or reference docs - always use absolute paths
 
@@ -28,14 +63,7 @@ Skills follow a **progressive disclosure** pattern - you know they exist (name +
 - When you need specialized knowledge or structured workflows
 - When a skill provides proven patterns for complex tasks
 
-**Skills are Self-Documenting:**
-- Each SKILL.md tells you exactly what the skill does and how to use it
-- Read only the skills you need - this keeps your context focused and efficient
-
-**Executing Skill Scripts:**
-Skills may contain Python scripts or other executable files. Always use absolute paths from the skill list.
-
-Remember: Skills are tools to make you more capable and consistent. When in doubt, check if a skill exists for the task!
+**Remember:** Skills are tools to make you more capable and consistent. When in doubt, check if a skill exists for the task!
 </skills_instructions>
 
 <available_skills>
@@ -43,30 +71,20 @@ Remember: Skills are tools to make you more capable and consistent. When in doub
 </available_skills>
 """
 
-# SKILLS_SYSTEM_PROMPT = """
-# You have access to a skills library that provides specialized capabilities and domain knowledge.
+SKILL_INSTRUCTIONS_PROMPT = """
+{default_system_prompt}
 
-# <skills_instructions>
-# When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
+## Skill Execution Guidelines
 
-# How to use skills:
-# - Invoke skills using this tool with the skill name only (no arguments)
-# - The skill's prompt will expand and provide detailed instructions on how to complete the task
-# - Examples:
-#   - \`command: "pdf"\` - invoke the pdf skill
-#   - \`command: "xlsx"\` - invoke the xlsx skill
-#   - \`command: "ms-office-suite:pdf"\` - invoke using fully qualified name
+<skills_instructions>
+1. **Follow the instructions**: Instructions contains step-by-step workflows, best practices, and examples
+2. **Access supporting files**: Instructions may include Python scripts, configs, or reference docs - always use absolute paths
+</skills_instructions>
 
-# Important:
-# - Only use skills listed in <available_skills> below
-# - Do not invoke a skill that is already running
-# - Do not use this tool for built-in CLI commands (like /help, /clear, etc.)
-# </skills_instructions>
+## Instructions
 
-# <available_skills>
-# {skills_list}
-# </available_skills>
-# """
+{instructions}
+"""
 
 
 def generate_skills_prompt(skills: List[SkillProperties]) -> str:
@@ -104,8 +122,25 @@ def generate_skills_prompt(skills: List[SkillProperties]) -> str:
 
     skills_list = "\n".join(skill_elements)
 
-    # Format the template
-    return SKILLS_SYSTEM_PROMPT.format(skills_list=skills_list)
+    # Format the template with skills list and directory paths
+    return SKILLS_SYSTEM_PROMPT.format(
+        default_system_prompt=generate_default_system_prompt(),
+        skills_list=skills_list,        
+    )
 
 
-__all__ = ["generate_skills_prompt"]
+def generate_default_system_prompt() -> str:
+    """Generate default system prompt"""
+    return DEFAULT_SYSTEM_PROMPT.format(
+        root_dir=str(ROOT_DIR.resolve())
+    )
+
+def generate_skill_instructions_prompt(instructions: str) -> str:
+    """Generate skill instructions prompt"""
+    return SKILL_INSTRUCTIONS_PROMPT.format(
+        default_system_prompt=generate_default_system_prompt(),
+        instructions=instructions
+    )
+
+
+__all__ = ["generate_skills_prompt", "generate_default_system_prompt", "generate_skill_instructions_prompt"]

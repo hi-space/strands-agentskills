@@ -60,7 +60,6 @@ def scan_skill_resources(skill_dir: Path) -> List[str]:
 def build_skill_header(
     skill: SkillProperties,
     include_resources: bool = True,
-    include_instructions_label: bool = False
 ) -> str:
     """Build a header string with skill metadata and resources.
 
@@ -72,13 +71,12 @@ def build_skill_header(
     Returns:
         Formatted header string
     """
-    # Build header with skill context
-    header = f"""# Skill: {skill.name}
 
-**Description:** {skill.description}
-
-**Skill Directory:** `{skill.skill_dir}/`
-"""
+    header = (
+        f"# Skill: {skill.name}\n\n"
+        f"**Description:** {skill.description}\n\n"
+        f"**Skill Directory:** `{skill.skill_dir}/`\n\n"
+    )
 
     # Add allowed-tools reminder if specified
     if skill.allowed_tools:
@@ -96,9 +94,6 @@ def build_skill_header(
             header += "\n"
 
     header += "---\n\n"
-
-    if include_instructions_label:
-        header += "# Instructions\n\n"
 
     return header
 

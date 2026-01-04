@@ -59,18 +59,17 @@ def init_session_state():
 
 def create_agent_by_mode(skills, skills_dir, mode: str):
     """선택된 모드에 따라 Agent 생성"""
-    base_prompt = "You are a helpful AI assistant with access to specialized skills."
     skills_prompt = generate_skills_prompt(skills)
-    full_prompt = base_prompt + "\n\n" + skills_prompt
-
+    
     agent_model = get_bedrock_agent_model(thinking=True)
+    default_tools = [file_read, file_write, shell, editor]
 
     if mode == "File-based Mode":
         agent = Agent(
-            system_prompt=full_prompt,
-            tools=[file_read, file_write, shell, editor],
+            system_prompt=skills_prompt,
+            tools=default_tools,
             model=agent_model,
-            callback_handler=None,  # Disable default callback for streaming
+            callback_handler=None,
         )
         return agent
 
@@ -78,8 +77,8 @@ def create_agent_by_mode(skills, skills_dir, mode: str):
         skill_tool = create_skill_tool(skills, skills_dir)
 
         agent = Agent(
-            system_prompt=full_prompt,
-            tools=[skill_tool, file_read, file_write, shell, editor],
+            system_prompt=skills_prompt,
+            tools=[skill_tool, *default_tools],
             model=agent_model,
             callback_handler=None,
         )
@@ -91,14 +90,14 @@ def create_agent_by_mode(skills, skills_dir, mode: str):
             skills,
             skills_dir,
             base_agent_model=agent_model,
-            additional_tools=[file_read, file_write, shell, editor]
+            additional_tools=default_tools
         )
 
         agent = Agent(
-            system_prompt=full_prompt,
+            system_prompt=skills_prompt,
             tools=[meta_tool],
             model=agent_model,
-            callback_handler=None,  # Disable default callback for custom streaming
+            callback_handler=None,
         )
         
         return agent
@@ -220,7 +219,7 @@ else:
 
     query = st.text_input(
         "질의 입력:",
-        "sales_data 파일을 분석하고 pptx 파일로 만들어주세요",
+        "sales_data 파일을 분석하고, 시각화 이미지를 첨부하여 pptx 파일로 만들어주세요",
         placeholder="Agent에게 질의를 입력하세요",        
         key="query_input",
     )
